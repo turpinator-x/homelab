@@ -36,9 +36,18 @@
 
 ---
 
+## 🏗️ Homelab Architecture
+
+┌─────────────────────────────────────────────────────────┐ │ Homelab Overview │ ├─────────────┬──────────────┬────────────────────────────┤ │ Laptop │ MiniPC │ Raspberry Pi 5 │ │ - Main dev │ - Compute │ - Edge automation │ │ - Backups │ - Services │ - Monitoring │ │ - Obsidian │ - Git server │ - Lightweight workloads │ └─────────────┴──────────────┴────────────────────────────┘
+
+Git Sync: dotfiles → GitHub → Auto-deploy on new hardware
+
+---
+
 ## 🎯 Looking For
 
 **DevOps Engineer roles at fintech/Web3 companies** (Circle, Ripple, Coinbase, startups) where I can work with:
+
 - Linux infrastructure
 - Kubernetes & container orchestration
 - CI/CD pipelines & automation
@@ -55,3 +64,9 @@
 ---
 
 > Currently building through [KubeCraft Career Accelerator](https://www.skool.com/kubecraft)
+
+---
+
+## 📁 Repository Structure
+
+homelab/ ├── README.md # This file ├── scripts/ # Bash automation scripts ├── dotfiles/ # Configuration files synced via Git ├── recovery/ # System backup & restore tools └── homelab-configs/ # Homelab service configurations
