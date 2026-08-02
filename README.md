@@ -48,7 +48,7 @@
 
 ## 📬 Get In Touch
 
-- **Email:** jarrodturpin@blockoneglobal.com
+- **Email:** contact@blockoneglobal.com
 - **LinkedIn:** [linkedin.com/in/jarrod-turpin](https://www.linkedin.com/in/jarrod-turpin)
 - **Location:** Carlsbad, CA
 
