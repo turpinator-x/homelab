@@ -44,6 +44,15 @@ Git Sync: dotfiles → GitHub → Auto-deploy on new hardware
 
 ---
 
+## 📄 Documentation Files
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — Infrastructure overview and design patterns
+- [`SCRIPTS_OVERVIEW.md`](./SCRIPTS_OVERVIEW.md) — Automation workflow descriptions
+
+> **Note:** Actual implementation scripts remain in private repositories for security and privacy.
+
+---
+
 ## 🎯 Looking For
 
 **DevOps Engineer roles at fintech/Web3 companies** (Circle, Ripple, Coinbase, startups) where I can work with:
@@ -57,16 +66,10 @@ Git Sync: dotfiles → GitHub → Auto-deploy on new hardware
 
 ## 📬 Get In Touch
 
-- **Email:** contact@blockoneglobal.com
+- **Email:** jarrodturpin@blockoneglobal.com
 - **LinkedIn:** [linkedin.com/in/jarrod-turpin](https://www.linkedin.com/in/jarrod-turpin)
 - **Location:** Carlsbad, CA
 
 ---
 
 > Currently building through [KubeCraft Career Accelerator](https://www.skool.com/kubecraft)
-
----
-
-## 📁 Repository Structure
-
-homelab/ ├── README.md # This file ├── scripts/ # Bash automation scripts ├── dotfiles/ # Configuration files synced via Git ├── recovery/ # System backup & restore tools └── homelab-configs/ # Homelab service configurations
