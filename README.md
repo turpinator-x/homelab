@@ -1,6 +1,6 @@
 # 👋 Jarrod Turpin | DevOps Engineer
 
-**Transitioning 20+ years Enterprise IT into hands-on DevOps engineering**
+**Transitioning 20+ years of Enterprise IT into hands-on DevOps engineering**
 
 ---
 
