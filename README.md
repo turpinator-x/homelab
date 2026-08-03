@@ -1,75 +1,50 @@
-# 👋 Jarrod Turpin | DevOps Engineer
+# Jarrod Turpin — DevOps Home Lab
 
-**Transitioning 20+ years of Enterprise IT into hands-on DevOps engineering**
+> Building cloud-native infrastructure skills through hands-on projects with
+> Linux, Kubernetes, Terraform, and configuration-as-code workflows.
 
----
+## 🔧 Current Setup
 
-## 🚀 Current Projects
+| Device | Role | OS |
+|--------|------|----|
+| Laptop | Primary workstation | Ubuntu 24.04 LTS |
+| Mini PC | Kubernetes node | Ubuntu Server 24.04 |
+| Raspberry Pi 5 | Edge node / monitoring | Raspberry Pi OS |
 
-| Project | Description | Status |
-|---|---|---|
-| **Homelab Infrastructure** | Cross-platform automation across laptop, miniPC, Raspberry Pi 5 | ✅ Active |
-| **Config-as-Code Workflow** | GitHub-synchronized dotfiles, scripts, Obsidian vault | ✅ Live |
-| **System Recovery Scripts** | Bash backup/restore for rapid machine deployment | ✅ Working |
-| **KubeCraft Projects** | Kubernetes, Docker, Terraform, CI/CD pipelines | 🔄 In Progress |
+## 🛠 Active Projects
 
----
+### Configuration-as-Code Workflow
+- Manages dotfiles, scripts, and knowledge base across 3 devices via GitHub
+- Enables full disaster recovery and rapid machine deployment
+- Automated sync using Git hooks and Bash scripts
 
-## 📈 Technical Highlights
+### Disaster Recovery & Backup System
+- Bash scripts for system backup to GitHub-synchronized repositories
+- Obsidian vault synced across all devices
+- Full machine restore on new hardware within minutes
 
-- ✅ Reduced test failures 70% at Microsoft through automation initiatives
-- ✅ Streamlined software release workflows 60-70% at Boeing
-- ✅ Built Linux homelab with automated Git sync for configs and scripts
-- ✅ Optimized compute workloads across heterogeneous hardware (CPU tuning, memory paging)
+### Cross-Platform Compute Optimization
+- Tuned CPU frequencies and memory paging across heterogeneous hardware
+- AI-assisted optimization for ARM (Pi 5) and x86 (Mini PC) architectures
 
----
+## 📚 Learning Roadmap
 
-## 🧰 Tech Stack
+- [x] Advanced Linux Administration
+- [ ] Bash Scripting & Automation
+- [x] Git/GitHub Workflows
+- [ ] Docker & Container Fundamentals
+- [ ] Kubernetes (KubeCraft Curriculum)
+- [ ] Terraform & Infrastructure as Code
+- [ ] Ansible Configuration Management
+- [ ] Python Scripting for Automation
 
-| Category | Tools |
-|---|---|---|
-| **OS** | Linux (Advanced courses completed), Bash scripting |
-| **Version Control** | Git, GitHub Actions |
-| **Infrastructure** | Learning Kubernetes, Docker, Terraform |
-| **Automation** | Bash, Python (beginner) |
-| **Domain** | Blockchain, DeFi, Web3 infrastructure |
+## 🎯 Certification Goals
 
----
+- [ ] CompTIA Linux+ / LPIC-1 — Q1-Q2 2027
+- [ ] CKA (Certified Kubernetes Administrator) — Q3 2027
+- [ ] Azure Administrator (AZ-104) — Q4 2027
 
-## 🏗️ Homelab Architecture
+## 📫 Connect
 
-┌─────────────────────────────────────────────────────────┐ │ Homelab Overview │ ├─────────────┬──────────────┬────────────────────────────┤ │ Laptop │ MiniPC │ Raspberry Pi 5 │ │ - Main dev │ - Compute │ - Edge automation │ │ - Backups │ - Services │ - Monitoring │ │ - Obsidian │ - Git server │ - Lightweight workloads │ └─────────────┴──────────────┴────────────────────────────┘
-
-Git Sync: dotfiles → GitHub → Auto-deploy on new hardware
-
----
-
-## 📄 Documentation Files
-
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — Infrastructure overview and design patterns
-- [`SCRIPTS_OVERVIEW.md`](./SCRIPTS_OVERVIEW.md) — Automation workflow descriptions
-
-> **Note:** Actual implementation scripts remain in private repositories for security and privacy.
-
----
-
-## 🎯 Looking For
-
-**DevOps Engineer roles at fintech/Web3 companies** (Circle, Ripple, Coinbase, startups) where I can work with:
-
-- Linux infrastructure
-- Kubernetes & container orchestration
-- CI/CD pipelines & automation
-- Cloud infrastructure (AWS, Azure, GCP)
-
----
-
-## 📬 Get In Touch
-
-- **Email:** jarrodturpin@blockoneglobal.com
-- **LinkedIn:** [linkedin.com/in/jarrod-turpin](https://www.linkedin.com/in/jarrod-turpin)
-- **Location:** Carlsbad, CA
-
----
-
-> Currently building through [KubeCraft Career Accelerator](https://www.skool.com/kubecraft)
+- LinkedIn: [linkedin.com/in/jarrod-turpin](https://linkedin.com/in/jarrod-turpin)
+- Email: jarrodturpin@blockoneglobal.com
