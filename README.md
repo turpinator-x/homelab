@@ -8,8 +8,8 @@ I'm Jarrod Turpin, moving into Platform and Cloud Engineering after 20+ years in
 
 - [x] Arch Linux built from scratch (LUKS + LVM, systemd, ufw)
 - [x] Kubernetes Fundamentals (Helm, PersistentVolumeClaims, Prometheus/Grafana)
-- [ ] Networking fundamentals, container networking, and BGP
-- [ ] Dev Containers, Neovim, and config management (Chezmoi, Mise)
+- [x] Networking fundamentals, container networking, and BGP (containerlab, all six lessons released so far)
+- [ ] Dev Containers, Neovim, and config management (in progress: Dev Containers, DevPod, and Chezmoi done; Mise next)
 - [ ] Local LLM services on Docker with Python
 - [ ] Multi-node Kubernetes homelab on srv1 and srv2
 - [ ] CKA certification
@@ -20,8 +20,8 @@ I'm Jarrod Turpin, moving into Platform and Cloud Engineering after 20+ years in
 |--------|----------|----------|----|------|
 | Main laptop | Stealth | MSI Stealth 17 Studio (i9-13900H, hybrid NVIDIA GPU, 2x 990 PRO) | Omarchy (Arch Linux) | Primary workstation, local Kubernetes via Rancher Desktop, KVM/libvirt VMs |
 | Travel laptop | odin | Lenovo ThinkPad T480 | Omarchy (Arch Linux) | Second workstation, SSH remote access |
-| Mini PC | srv1 | KAMRUI AM21 | Ubuntu Server | Planned Kubernetes node |
-| Raspberry Pi 5 | srv2 | Raspberry Pi 5 | Ubuntu Server | Planned edge and monitoring node |
+| Mini PC | srv1 | KAMRUI AM21 | Ubuntu Server 26.04 | Planned Kubernetes node |
+| Raspberry Pi 5 | ubuntusrvpi | Raspberry Pi 5 (8 GB) | Ubuntu Server 24.04 | Planned edge and monitoring node |
 
 All four machines share a TESmart 4-port HDMI KVM switch and a Dell S2725QS monitor.
 
@@ -33,18 +33,21 @@ Manual install from the KubeCraft Linux Advanced course: GPT partitioning, LVM o
 ### Kubernetes Fundamentals
 Local cluster on Rancher Desktop. Deployments with rolling updates, Namespaces, ClusterIP/NodePort/LoadBalancer Services, Ingress, PersistentVolumeClaims (Mealie), Helm releases (Homarr), and the kube-prometheus-stack with Grafana. Manifests are in the [lab repo](https://github.com/turpinator-x/lab).
 
+### Networking (containerlab)
+Six hands-on lessons on Nokia SR Linux in containerlab: Linux network namespaces and Docker bridges, IP addressing, static routing, eBGP with export policies, and a spine-leaf BGP fabric with ECMP. Each lesson ends with break/fix exercises (missing routes, black holes, routing loops, wrong ASNs, a spine failure, a route leak). Write-ups are in the [lab repo](https://github.com/turpinator-x/lab/tree/main/networking).
+
 ### Workstation Automation (AI-assisted)
-A private dotfiles and deploy repo (`15m-workstation`) built with Claude Code as a pair programmer. I set the requirements, review the changes, and run it across both laptops:
-- Fresh-deploy script that rebuilds an Omarchy workstation from the repo
-- Config harvesting to GitHub, plus rsync backups to a LUKS-encrypted USB drive and end-to-end encrypted Proton Drive
+Built with Claude Code as a pair programmer. I set the requirements, review the changes, and run it across all four machines:
+- Dotfiles managed with chezmoi in a private repo: one source for both laptops and both servers, with templates for per-machine differences (monitor layout, SSH aliases, desktop vs. server shell profile)
+- Fresh-deploy script (`15m-workstation`) that rebuilds an Omarchy workstation and applies the dotfiles
+- Config and system snapshots to GitHub, plus rsync backups to a LUKS-encrypted USB drive and end-to-end encrypted Proton Drive
 - Restore script for new hardware
-- inotify watcher that backs up my Obsidian notes vault on change
 
 See [SCRIPTS_OVERVIEW.md](SCRIPTS_OVERVIEW.md) for details.
 
 ### Hardening and Tuning (AI-assisted)
 - UEFI Secure Boot with custom keys (sbctl) and automatic kernel signing
-- SSH key-only auth and an sshd hardening drop-in
+- SSH key-only auth and an sshd hardening drop-in; the servers' ufw only accepts SSH from the two laptops, which have DHCP reservations
 - linux-lts fallback kernel, TCP BBR congestion control
 - fstrim and pacman cache cleanup systemd timers, firmware updates through fwupd
 
@@ -65,8 +68,9 @@ See [SCRIPTS_OVERVIEW.md](SCRIPTS_OVERVIEW.md) for details.
 ## Related Repos
 
 - [lab](https://github.com/turpinator-x/lab): course exercises (Bash, Docker, Kubernetes YAML)
-- `15m-workstation` (private): dotfiles, deploy, and backup automation
-- Obsidian knowledge base (private): 100+ technical notes from the KubeCraft courses
+- `dotfiles` (private): chezmoi-managed config for all four machines
+- `15m-workstation` (private): deploy, backup, and sync automation
+- Obsidian knowledge base (private): 240+ technical notes from the KubeCraft courses
 
 ## Connect
 
