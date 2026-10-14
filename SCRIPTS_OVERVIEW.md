@@ -14,9 +14,9 @@ The goal is a working workstation on new hardware in about 15 minutes.
 
 - **Fresh deploy:** installs packages and applies the chezmoi dotfiles to rebuild an Omarchy (Arch Linux) workstation
 - **syncgit:** gathers system snapshots (ufw rules, sshd hardening, fstab, VM definitions, per host) and app settings, and pushes them to GitHub
-- **master_backup_and_harvest:** rsync of documents, pictures, and lab work to a LUKS-encrypted USB drive and to end-to-end encrypted Proton Drive
+- **master_backup_and_harvest:** rsync of documents, pictures, and lab work to a LUKS-encrypted USB drive and to end-to-end encrypted Proton Drive. Files deleted locally are moved to the Proton Drive trash, with a guard that refuses unusually large deletions.
 - **restore_from_backup:** restores from those backups onto a fresh install
-- **push_to_odin:** LAN rsync from the main laptop to the second laptop over SSH
+- **push_to_odin / pull_from_odin:** LAN rsync between the two laptops over SSH, plus Syncthing for continuous file sync
 
 ## Notes Vault Backup
 
