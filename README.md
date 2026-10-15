@@ -6,7 +6,7 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, managed from my workstation with `kubectl`. Next up: GitOps with FluxCD, so everything in the cluster is deployed from this repository.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. Next up: deploying apps and infrastructure through Flux.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -14,7 +14,7 @@ srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0
 ubuntusrvpi   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout and [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, and [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed.
 
 ## Roadmap
 
@@ -24,7 +24,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout and [docs/k3s-cluster.md](
 - [x] Dev Containers, Neovim (LazyVim), and config management with chezmoi and mise
 - [x] Local LLM services on Docker with Python: a RAG-based PDF question-answering app (LocalAI, embeddings, Qdrant, FastAPI, web UI)
 - [x] Multi-node k3s cluster (mixed amd64 and arm64)
-- [ ] GitOps with FluxCD: cluster state declared in this repo
+- [x] GitOps with FluxCD: Flux bootstrapped and managing itself from this repo
+- [ ] Apps and infrastructure deployed through Flux (Kustomize, HelmReleases)
 - [ ] Storage, secrets management, monitoring, and Traefik ingress on the cluster
 - [ ] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev`
 - [ ] Automated image updates and a capstone project
@@ -45,7 +46,7 @@ All four machines share a TESmart 4-port HDMI KVM switch and a Dell S2725QS moni
 ## What's Built
 
 ### Kubernetes Homelab (k3s)
-A two-node k3s cluster: the mini PC as the control plane and the Raspberry Pi 5 as a worker, so workloads run across both amd64 and arm64. Host firewalls (ufw) only open the ports the nodes need between each other, and the Kubernetes API is reachable from the LAN only. The workstation keeps separate `kubectl` contexts for the homelab and the local Rancher Desktop cluster. Following the KubeCraft Kubernetes Homelab course, the cluster will be managed with GitOps (FluxCD) from this repo.
+A two-node k3s cluster: the mini PC as the control plane and the Raspberry Pi 5 as a worker, so workloads run across both amd64 and arm64. Host firewalls (ufw) only open the ports the nodes need between each other, and the Kubernetes API is reachable from the LAN only. The workstation keeps separate `kubectl` contexts for the homelab and the local Rancher Desktop cluster. Following the KubeCraft Kubernetes Homelab course, the cluster is managed with GitOps: FluxCD pulls this repo over a read-only SSH deploy key and reconciles the cluster to match it, so changes go in through Git commits rather than `kubectl apply`.
 
 ### Local AI: PDF Question Answering (RAG)
 A local, CPU-only document Q&A service from the KubeCraft Python, Docker & AI course: Phi-3.5-mini served by LocalAI, a sentence-transformers embeddings API, Qdrant vector search, a FastAPI backend that streams answers, and a web UI with source citations. It runs entirely on my laptop with Docker Compose. The code is in a private repo because it builds on paid course material.

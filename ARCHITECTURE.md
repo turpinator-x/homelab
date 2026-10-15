@@ -19,7 +19,7 @@ flowchart LR
     S -. "SSH, key-only" .-> PI
     O -. "SSH, key-only" .-> SRV
     O -. "SSH, key-only" .-> PI
-    GH["GitHub<br>this repo"] -. "GitOps with FluxCD (next)" .-> Cluster
+    Cluster -- "Flux pulls over SSH<br>(read-only deploy key)" --> GH["GitHub<br>this repo"]
     CF["Cloudflare Tunnel<br>jarrodturpin.dev (planned)"] -. "public apps" .-> Cluster
 ```
 
@@ -33,7 +33,8 @@ flowchart LR
 - **Distribution:** k3s, installed with the official script. It bundles containerd, Flannel networking, CoreDNS, Traefik ingress, ServiceLB, local-path storage, and metrics-server.
 - **Mixed architecture:** the control plane is amd64 and the worker is arm64, so every image needs builds for both.
 - **Network policy at the host:** ufw on both nodes allows only what the cluster needs: the API server (6443/tcp) from the LAN, kubelet (10250/tcp) and Flannel VXLAN (8472/udp) between the two nodes, and the pod and service networks.
-- **Next:** FluxCD reconciles the cluster from this repository, followed by storage, secrets management, monitoring, Traefik ingress, and Cloudflare Tunnel for public apps.
+- **GitOps:** FluxCD v2.9 runs in the `flux-system` namespace. It checks this repo every minute and applies `clusters/staging` (with pruning, so anything removed from Git is removed from the cluster). Flux authenticates with a read-only SSH deploy key; no GitHub token is stored in the cluster.
+- **Next:** apps and infrastructure through Flux, then storage, secrets management, monitoring, Traefik ingress, and Cloudflare Tunnel for public apps.
 
 ## Sync Strategy
 
@@ -49,7 +50,8 @@ flowchart LR
 - Arch Linux (Omarchy), Ubuntu Server, systemd, ufw
 - Bash, Git, chezmoi, mise
 - Docker, Kubernetes (k3s), Helm, Prometheus, Grafana
-- FluxCD and Cloudflare Tunnel (next)
+- FluxCD (GitOps), Kustomize
+- Cloudflare Tunnel (next)
 - Claude Code for AI-assisted scripting and troubleshooting
 
 ## Privacy & Security
