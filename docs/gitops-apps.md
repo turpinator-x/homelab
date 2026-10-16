@@ -12,7 +12,8 @@ apps/
 │   └── linkding/
 │       ├── kustomization.yaml
 │       ├── namespace.yaml
-│       └── deployment.yaml
+│       ├── deployment.yaml
+│       └── storage.yaml      # PersistentVolumeClaim
 └── staging/                  # per-environment overlays that point at base
     └── linkding/
         └── kustomization.yaml
@@ -32,7 +33,7 @@ flowchart LR
     GR --> FS["Kustomization flux-system<br>applies clusters/staging"]
     FS --> A["Kustomization apps<br>(from apps.yaml)<br>applies apps/staging every 1m"]
     A --> O["apps/staging/linkding<br>sets namespace: linkding"]
-    O --> B["apps/base/linkding<br>Namespace + Deployment"]
+    O --> B["apps/base/linkding<br>Namespace, PVC, Deployment"]
 ```
 
 - `clusters/staging/apps.yaml` is a Flux `Kustomization` (`kustomize.toolkit.fluxcd.io/v1`) with `path: ./apps/staging`, `interval: 1m0s` and `prune: true`, so removing an app's files from Git removes it from the cluster.
@@ -51,4 +52,12 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 
 | App | What it is | Status |
 |---|---|---|
-| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15). Next: persistent storage and a hardened security context |
+| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Next: a hardened security context |
+
+## Storage
+
+Apps that keep data get a PersistentVolumeClaim in their base folder. With no `storageClassName`, it uses k3s's default `local-path` class, which provisions a folder on the node's disk when the first pod uses the claim (`WaitForFirstConsumer`). Trade-offs I'm aware of:
+
+- The volume is pinned to the node it was created on, so the pod can't move to the other node if that one goes down.
+- The requested size isn't enforced; the folder can grow into the node's free space.
+- The reclaim policy is `Delete`, so removing the claim from Git (with Flux pruning on) deletes the data. Backups and replicated storage are on the roadmap.
