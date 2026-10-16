@@ -52,7 +52,7 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 
 | App | What it is | Status |
 |---|---|---|
-| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Next: a hardened security context |
+| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled. Next: secure public access through Cloudflare Tunnel |
 
 ## Storage
 
@@ -61,3 +61,7 @@ Apps that keep data get a PersistentVolumeClaim in their base folder. With no `s
 - The volume is pinned to the node it was created on, so the pod can't move to the other node if that one goes down.
 - The requested size isn't enforced; the folder can grow into the node's free space.
 - The reclaim policy is `Delete`, so removing the claim from Git (with Flux pruning on) deletes the data. Backups and replicated storage are on the roadmap.
+
+## Security
+
+Containers don't run as root. Linkding's pod sets `runAsUser`, `runAsGroup` and `fsGroup` to 33 (the image's `www-data` user), and the container sets `allowPrivilegeEscalation: false`. Verified by `id` inside the container returning `uid=33(www-data)`, and `apt update` failing, so a compromised app can't install tools into its container.
