@@ -24,6 +24,9 @@ spec:
         image: sissbruecker/linkding:1.31.0
         ports:
           - containerPort: 9090
+        env:
+          - name: LD_CSRF_TRUSTED_ORIGINS
+            value: https://linkding.jarrodturpin.dev
 
         securityContext:
           allowPrivilegeEscalation: false
