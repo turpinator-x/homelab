@@ -20,7 +20,8 @@ flowchart LR
     O -. "SSH, key-only" .-> SRV
     O -. "SSH, key-only" .-> PI
     Cluster -- "Flux pulls over SSH<br>(read-only deploy key)" --> GH["GitHub<br>this repo"]
-    CF["Cloudflare Tunnel<br>jarrodturpin.dev (planned)"] -. "public apps" .-> Cluster
+    U["Internet users"] -- "HTTPS" --> CF["Cloudflare edge<br>linkding.jarrodturpin.dev"]
+    Cluster -- "cloudflared: outbound tunnel<br>(2 replicas, one per node)" --> CF
 ```
 
 - **Stealth (primary laptop):** daily workstation on Omarchy (Arch Linux). Manages the homelab cluster with `kubectl` and runs a separate local cluster in Rancher Desktop. The two are kept apart as separate `kubectl` contexts (`homelab` and `rancher-desktop`).
@@ -34,7 +35,8 @@ flowchart LR
 - **Mixed architecture:** the control plane is amd64 and the worker is arm64, so every image needs builds for both.
 - **Network policy at the host:** ufw on both nodes allows only what the cluster needs: the API server (6443/tcp) from the LAN, kubelet (10250/tcp) and Flannel VXLAN (8472/udp) between the two nodes, and the pod and service networks.
 - **GitOps:** FluxCD v2.9 runs in the `flux-system` namespace. It checks this repo every minute and applies `clusters/staging` (with pruning, so anything removed from Git is removed from the cluster). Flux authenticates with a read-only SSH deploy key; no GitHub token is stored in the cluster.
-- **Next:** apps and infrastructure through Flux, then storage, secrets management, monitoring, Traefik ingress, and Cloudflare Tunnel for public apps.
+- **Public access:** a Cloudflare Tunnel. Two `cloudflared` pods (one on each node) hold outbound connections to Cloudflare, which forwards requests for `linkding.jarrodturpin.dev` to the Linkding Service. No router ports are open and the home IP isn't published in DNS. The tunnel credentials are a Kubernetes Secret created outside Git.
+- **Next:** secrets management in Git, monitoring, and Traefik ingress.
 
 ## Sync Strategy
 
@@ -51,7 +53,7 @@ flowchart LR
 - Bash, Git, chezmoi, mise
 - Docker, Kubernetes (k3s), Helm, Prometheus, Grafana
 - FluxCD (GitOps), Kustomize
-- Cloudflare Tunnel (next)
+- Cloudflare Tunnel (cloudflared)
 - Claude Code for AI-assisted scripting and troubleshooting
 
 ## Privacy & Security

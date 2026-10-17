@@ -13,10 +13,12 @@ apps/
 │       ├── kustomization.yaml
 │       ├── namespace.yaml
 │       ├── deployment.yaml
+│       ├── service.yaml      # ClusterIP Service on 9090
 │       └── storage.yaml      # PersistentVolumeClaim
 └── staging/                  # per-environment overlays that point at base
     └── linkding/
-        └── kustomization.yaml
+        ├── kustomization.yaml
+        └── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
 clusters/
 └── staging/
     ├── apps.yaml             # Flux Kustomization: apply ./apps/staging
@@ -52,7 +54,7 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 
 | App | What it is | Status |
 |---|---|---|
-| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled. Next: secure public access through Cloudflare Tunnel |
+| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled. Public at `https://linkding.jarrodturpin.dev` through a Cloudflare Tunnel (2026-10-17) |
 
 ## Storage
 
@@ -65,3 +67,21 @@ Apps that keep data get a PersistentVolumeClaim in their base folder. With no `s
 ## Security
 
 Containers don't run as root. Linkding's pod sets `runAsUser`, `runAsGroup` and `fsGroup` to 33 (the image's `www-data` user), and the container sets `allowPrivilegeEscalation: false`. Verified by `id` inside the container returning `uid=33(www-data)`, and `apt update` failing, so a compromised app can't install tools into its container.
+
+## Public access: Cloudflare Tunnel
+
+```mermaid
+flowchart LR
+    U["Browser"] -- "HTTPS" --> E["Cloudflare edge<br>linkding.jarrodturpin.dev"]
+    T1["cloudflared pod<br>srv1"] -- "outbound QUIC" --> E
+    T2["cloudflared pod<br>Raspberry Pi"] -- "outbound QUIC" --> E
+    T1 --> S["Service linkding:9090"]
+    T2 --> S
+    S --> P["Linkding pod"]
+```
+
+- **Tunnel created from the CLI:** `cloudflared tunnel login`, `cloudflared tunnel create homelab`, then `cloudflared tunnel route dns homelab linkding.jarrodturpin.dev` for the proxied CNAME.
+- **Credentials stay out of Git:** the tunnel's credentials file is loaded into the cluster with `kubectl create secret generic tunnel-credentials -n linkding --from-file=credentials.json=...`. The account certificate stays on my workstation.
+- **cloudflared runs from Git:** `apps/staging/linkding/cloudflare.yaml` holds the Deployment (2 replicas spread across both nodes, image pinned to a release, non-root) and a ConfigMap with the ingress rules: the hostname goes to `http://linkding:9090`, everything else gets a 404. It sits in the staging overlay because the hostname is environment-specific.
+- **Django behind a proxy:** Linkding gets `LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev`, otherwise logins through the tunnel fail CSRF checks.
+- **Verify:** `kubectl logs -n linkding deploy/cloudflared | grep "Registered tunnel connection"` and `cloudflared tunnel info homelab`.
