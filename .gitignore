@@ -1,0 +1,30 @@
+# Never commit secrets. Encrypted secrets are committed only after
+# `sops --encrypt`; everything below must never reach this public repo.
+
+# age private keys (SOPS)
+*.agekey
+keys.txt
+
+# Cloudflare: account certificate and tunnel credentials
+cert.pem
+*.pem
+credentials.json
+# tunnel credential files are named <tunnel-id>.json
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*-*-*-*.json
+
+# Kubeconfigs and k3s
+kubeconfig*
+*.kubeconfig
+k3s.yaml
+node-token
+
+# Env files and other key material
+.env
+.env.*
+*.key
+id_*
+
+# Editor and OS cruft
+.DS_Store
+*.swp
+*~
