@@ -17,9 +17,10 @@ apps/
 │       └── storage.yaml      # PersistentVolumeClaim
 └── staging/                  # per-environment overlays that point at base
     └── linkding/
-        ├── kustomization.yaml
+        ├── kustomization.yaml   # also generates linkding-configmap (staging settings)
         ├── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
-        └── cloudflare-secret.yaml   # tunnel credentials, SOPS-encrypted
+        ├── cloudflare-secret.yaml   # tunnel credentials, SOPS-encrypted
+        └── linkding-container-env-secret.yaml   # Linkding admin account, SOPS-encrypted
 clusters/
 └── staging/
     ├── apps.yaml             # Flux Kustomization: apply ./apps/staging
@@ -84,8 +85,22 @@ flowchart LR
 - **Tunnel created from the CLI:** `cloudflared tunnel login`, `cloudflared tunnel create homelab`, then `cloudflared tunnel route dns homelab linkding.jarrodturpin.dev` for the proxied CNAME.
 - **Credentials are encrypted in Git:** the tunnel's credentials file is a Secret in `apps/staging/linkding/cloudflare-secret.yaml`, encrypted with SOPS (see Secrets below). The account certificate stays on my workstation.
 - **cloudflared runs from Git:** `apps/staging/linkding/cloudflare.yaml` holds the Deployment (2 replicas spread across both nodes, image pinned to a release, non-root) and a ConfigMap with the ingress rules: the hostname goes to `http://linkding:9090`, everything else gets a 404. It sits in the staging overlay because the hostname is environment-specific.
-- **Django behind a proxy:** Linkding gets `LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev`, otherwise logins through the tunnel fail CSRF checks.
+- **Django behind a proxy:** Linkding gets `LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev` from the staging ConfigMap (see Configuration), otherwise logins through the tunnel fail CSRF checks.
 - **Verify:** `kubectl logs -n linkding deploy/cloudflared | grep "Registered tunnel connection"` and `cloudflared tunnel info homelab`.
+
+## Configuration
+
+Following [12-factor config](https://12factor.net/config), settings that change per environment live outside the manifests that define the app. The base Deployment only says *where* its settings come from:
+
+```yaml
+envFrom:
+  - configMapRef:
+      name: linkding-configmap      # settings
+  - secretRef:
+      name: linkding-container-env  # credentials
+```
+
+The staging overlay supplies the values. `linkding-configmap` comes from a Kustomize `configMapGenerator`, which adds a hash of the contents to the name (`linkding-configmap-<hash>`) and updates the Deployment's reference to match. Changing a setting therefore changes the pod template, so the Deployment rolls out new pods automatically; a plain ConfigMap would leave running pods on the old values until a manual restart. Flux prunes the old ConfigMap.
 
 ## Secrets
 
@@ -102,6 +117,7 @@ flowchart LR
 - **Only values are encrypted:** `.sops.yaml` at the repo root encrypts `data` and `stringData`, so the kind, name and namespace stay readable in diffs.
 - **The private key exists in two places:** my workstation (outside the repo, backed up offline) and the `sops-age` Secret in `flux-system`, created by hand. It is the only Secret not in Git; a rebuilt cluster needs just this one to recover everything else.
 - **Decryption is per Kustomization:** `clusters/staging/apps.yaml` has a `decryption` block with `provider: sops` pointing at `sops-age`.
+- **Linkding's admin account:** `LD_SUPERUSER_NAME` and `LD_SUPERUSER_PASSWORD` come from an encrypted Secret, so a fresh install (new cluster or empty volume) creates the admin user with no manual `createsuperuser` step. Linkding skips this when the user already exists and never changes an existing password.
 - **Editing:** `sops <file>` opens the decrypted Secret in an editor and re-encrypts it on save.
 
 ### Guardrails

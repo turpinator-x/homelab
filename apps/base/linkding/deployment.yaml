@@ -24,13 +24,11 @@ spec:
         image: sissbruecker/linkding:1.31.0
         ports:
           - containerPort: 9090
-        env:
-          - name: LD_CSRF_TRUSTED_ORIGINS
-            value: https://linkding.jarrodturpin.dev
-        
         envFrom:
+          - configMapRef:
+              name: linkding-configmap # settings, per environment
           - secretRef:
-              name: linkding-container-env
+              name: linkding-container-env # credentials, SOPS-encrypted
 
         securityContext:
           allowPrivilegeEscalation: false

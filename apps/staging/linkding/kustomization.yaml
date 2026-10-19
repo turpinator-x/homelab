@@ -6,3 +6,7 @@ resources:
   - cloudflare.yaml
   - cloudflare-secret.yaml
   - linkding-container-env-secret.yaml
+configMapGenerator:
+  - name: linkding-configmap
+    literals:
+      - LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev
