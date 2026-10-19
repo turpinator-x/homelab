@@ -6,7 +6,7 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Next up: secrets management in Git, monitoring, and Traefik ingress.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Next up: monitoring and Traefik ingress.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -28,7 +28,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [x] First app deployed through Flux with Kustomize base/overlay layout (Linkding)
 - [ ] Infrastructure and more apps through Flux (HelmReleases)
 - [x] Persistent storage and non-root containers
-- [ ] Secrets management, monitoring, and Traefik ingress on the cluster
+- [x] Secrets in Git, encrypted with SOPS and age, with a pre-commit guardrail
+- [ ] Monitoring and Traefik ingress on the cluster
 - [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
 - [ ] Automated image updates and a capstone project
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)

@@ -35,8 +35,9 @@ flowchart LR
 - **Mixed architecture:** the control plane is amd64 and the worker is arm64, so every image needs builds for both.
 - **Network policy at the host:** ufw on both nodes allows only what the cluster needs: the API server (6443/tcp) from the LAN, kubelet (10250/tcp) and Flannel VXLAN (8472/udp) between the two nodes, and the pod and service networks.
 - **GitOps:** FluxCD v2.9 runs in the `flux-system` namespace. It checks this repo every minute and applies `clusters/staging` (with pruning, so anything removed from Git is removed from the cluster). Flux authenticates with a read-only SSH deploy key; no GitHub token is stored in the cluster.
-- **Public access:** a Cloudflare Tunnel. Two `cloudflared` pods (one on each node) hold outbound connections to Cloudflare, which forwards requests for `linkding.jarrodturpin.dev` to the Linkding Service. No router ports are open and the home IP isn't published in DNS. The tunnel credentials are a Kubernetes Secret created outside Git.
-- **Next:** secrets management in Git, monitoring, and Traefik ingress.
+- **Public access:** a Cloudflare Tunnel. Two `cloudflared` pods (one on each node) hold outbound connections to Cloudflare, which forwards requests for `linkding.jarrodturpin.dev` to the Linkding Service. No router ports are open and the home IP isn't published in DNS. The tunnel credentials are a SOPS-encrypted Secret in Git.
+- **Secrets:** committed to this repo encrypted with SOPS and age. Flux decrypts them with a private key held in one Secret created by hand; a pre-commit hook blocks unencrypted Secrets and leaked credentials.
+- **Next:** monitoring and Traefik ingress.
 
 ## Sync Strategy
 
@@ -61,4 +62,4 @@ flowchart LR
 - Full-disk encryption (LUKS) and UEFI Secure Boot on the laptops; LUKS on srv1
 - SSH key-only authentication with a hardened sshd config on every machine
 - Host firewalls on the servers allow SSH only from the workstations
-- Secrets, tokens, and kubeconfigs are never stored in public repos
+- Kubernetes Secrets are stored in Git only SOPS-encrypted; tokens, keys and kubeconfigs never are
