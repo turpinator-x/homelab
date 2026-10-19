@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Block commits that would put a plaintext secret into this public repo.
+#   1. Any staged YAML containing "kind: Secret" must be SOPS-encrypted.
+#   2. gitleaks scans the staged changes for keys, tokens and credentials.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+
+fail=0
+
+while IFS= read -r -d '' file; do
+  content=$(git show ":$file")
+  if grep -qE '^kind:[[:space:]]*Secret[[:space:]]*$' <<<"$content" &&
+     ! grep -qE '^sops:' <<<"$content"; then
+    echo "pre-commit: $file is a Secret that is not encrypted." >&2
+    echo "            Run: sops -e -i $file" >&2
+    fail=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.yaml' '*.yml')
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --no-banner --redact || fail=1
+elif command -v mise >/dev/null 2>&1; then
+  mise exec gitleaks@latest -- gitleaks git --pre-commit --staged --no-banner --redact || fail=1
+else
+  echo "pre-commit: gitleaks not found (install it with mise); skipping the leak scan." >&2
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: commit blocked. Fix the files above and try again." >&2
+  exit 1
+fi

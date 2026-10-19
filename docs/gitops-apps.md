@@ -18,7 +18,8 @@ apps/
 └── staging/                  # per-environment overlays that point at base
     └── linkding/
         ├── kustomization.yaml
-        └── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
+        ├── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
+        └── cloudflare-secret.yaml   # tunnel credentials, SOPS-encrypted
 clusters/
 └── staging/
     ├── apps.yaml             # Flux Kustomization: apply ./apps/staging
@@ -81,7 +82,39 @@ flowchart LR
 ```
 
 - **Tunnel created from the CLI:** `cloudflared tunnel login`, `cloudflared tunnel create homelab`, then `cloudflared tunnel route dns homelab linkding.jarrodturpin.dev` for the proxied CNAME.
-- **Credentials stay out of Git:** the tunnel's credentials file is loaded into the cluster with `kubectl create secret generic tunnel-credentials -n linkding --from-file=credentials.json=...`. The account certificate stays on my workstation.
+- **Credentials are encrypted in Git:** the tunnel's credentials file is a Secret in `apps/staging/linkding/cloudflare-secret.yaml`, encrypted with SOPS (see Secrets below). The account certificate stays on my workstation.
 - **cloudflared runs from Git:** `apps/staging/linkding/cloudflare.yaml` holds the Deployment (2 replicas spread across both nodes, image pinned to a release, non-root) and a ConfigMap with the ingress rules: the hostname goes to `http://linkding:9090`, everything else gets a 404. It sits in the staging overlay because the hostname is environment-specific.
 - **Django behind a proxy:** Linkding gets `LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev`, otherwise logins through the tunnel fail CSRF checks.
 - **Verify:** `kubectl logs -n linkding deploy/cloudflared | grep "Registered tunnel connection"` and `cloudflared tunnel info homelab`.
+
+## Secrets
+
+Secrets live in this public repo, encrypted with [SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age). Flux decrypts them as it applies them.
+
+```mermaid
+flowchart LR
+    W["Workstation<br>kubectl create secret --dry-run"] -- "sops -e -i<br>(age public key)" --> G["Git<br>ENC[...] values only"]
+    G -- "Flux pulls" --> F["Kustomization apps<br>decryption: sops"]
+    K["Secret sops-age<br>(age private key)"] --> F
+    F --> S["Kubernetes Secret"]
+```
+
+- **Only values are encrypted:** `.sops.yaml` at the repo root encrypts `data` and `stringData`, so the kind, name and namespace stay readable in diffs.
+- **The private key exists in two places:** my workstation (outside the repo, backed up offline) and the `sops-age` Secret in `flux-system`, created by hand. It is the only Secret not in Git; a rebuilt cluster needs just this one to recover everything else.
+- **Decryption is per Kustomization:** `clusters/staging/apps.yaml` has a `decryption` block with `provider: sops` pointing at `sops-age`.
+- **Editing:** `sops <file>` opens the decrypted Secret in an editor and re-encrypts it on save.
+
+### Guardrails
+
+A versioned pre-commit hook in [`.githooks/pre-commit`](../.githooks/pre-commit) blocks a commit when:
+
+- a staged YAML file contains `kind: Secret` but no `sops:` block (a Secret that was never encrypted), or
+- [gitleaks](https://github.com/gitleaks/gitleaks) finds keys, tokens or credentials in the staged changes.
+
+Git doesn't run hooks from a clone automatically, so each clone enables it once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`.gitignore` is the second layer: it blocks age keys, Cloudflare credential files, kubeconfigs and the k3s node token from being staged at all.
