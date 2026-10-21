@@ -57,7 +57,7 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 
 | App | What it is | Status |
 |---|---|---|
-| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled. Public at `https://linkding.jarrodturpin.dev` through a Cloudflare Tunnel (2026-10-17) |
+| [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled; background tasks run in a second container in the same pod. Public at `https://linkding.jarrodturpin.dev` through a Cloudflare Tunnel (2026-10-17) |
 
 ## Storage
 
@@ -70,6 +70,8 @@ Apps that keep data get a PersistentVolumeClaim in their base folder. With no `s
 ## Security
 
 Containers don't run as root. Linkding's pod sets `runAsUser`, `runAsGroup` and `fsGroup` to 33 (the image's `www-data` user), and the container sets `allowPrivilegeEscalation: false`. Verified by `id` inside the container returning `uid=33(www-data)`, and `apt update` failing, so a compromised app can't install tools into its container.
+
+**Background worker as a second container.** Linkding normally starts its task worker (huey: favicons, preview images, snapshots) through supervisord, which expects to start as root and then switch to `www-data`. As non-root it refuses (`Error: Can't drop privilege as nonroot user` in the web container's log), so the worker never ran. The fix keeps the hardening: the pod has a second container, `linkding-tasks`, from the same image, running `python manage.py run_huey -f` directly. It shares the data volume (the queue is `data/tasks.sqlite3`), inherits UID 33 from the pod, and gets the ConfigMap but not the Secret, since it doesn't need the admin credentials. The web container still prints the supervisord error once at startup; that's expected and harmless. Check it with `kubectl logs -n linkding deploy/linkding -c linkding-tasks`.
 
 ## Public access: Cloudflare Tunnel
 
