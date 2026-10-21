@@ -102,7 +102,7 @@ flowchart LR
 ```
 
 - **Why `home.arpa`:** it's reserved for home networks (RFC 8375), so it can never clash with a real site. `.dev` names (like my public domain) are on the browsers' HSTS preload list, which forces HTTPS and blocks clicking past a self-signed certificate.
-- **Name resolution:** no local DNS server yet, so the names are in `/etc/hosts` on the workstations. Check with `getent hosts <name>`; `nslookup` asks DNS directly and ignores the hosts file.
+- **Name resolution:** no local DNS server yet, so the names are in `/etc/hosts` on the workstations. Check with `getent hosts <name>`; `nslookup` asks DNS directly and ignores the hosts file. The plan is a wildcard DNS record for a subdomain of my own domain pointing at the nodes, with a trusted wildcard certificate from cert-manager and Let's Encrypt, so phones and other devices work too (on the roadmap).
 - **Exposure:** ServiceLB forwards ports 80 and 443 to Traefik, and forwarded traffic doesn't pass ufw's input rules, so every Ingress is reachable from the whole LAN. Nothing is reachable from the internet (no router port forwards; the Traefik Service is IPv4 only). Everything published this way has its own login.
 - **Gotcha:** a browser proxy (in my case a VPN extension) sends `*.home.arpa` to the proxy instead of reading `/etc/hosts`, which shows up as a 404. curl working while the browser fails points at the browser. Fix: exclude `home.arpa` from the proxy.
 

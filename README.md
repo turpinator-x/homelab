@@ -32,6 +32,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [x] Secrets in Git, encrypted with SOPS and age, with a pre-commit guardrail
 - [x] Monitoring with kube-prometheus-stack, installed by a Flux HelmRelease
 - [x] Traefik Ingress for LAN hostnames, Grafana with a SOPS-encrypted TLS certificate
+- [ ] LAN DNS and trusted certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare) and a wildcard `*.lab` record, so every device on the network reaches the apps by name with no hosts files or certificate warnings
 - [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
 - [ ] Automated image updates and a capstone project
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)
