@@ -71,6 +71,7 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 | App | What it is | Status |
 |---|---|---|
 | [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled; background tasks run in a second container in the same pod. Public at `https://linkding.jarrodturpin.dev` through a Cloudflare Tunnel (2026-10-17) |
+| [Audiobookshelf](https://github.com/advplyr/audiobookshelf) | Audiobook and podcast server (course capstone) | Deployed (2026-10-21), translated from the project's Docker Compose file: four PVCs on srv1, non-root (UID 1000), `Recreate` strategy for its SQLite database, health probes. Public at `https://audiobooks.jarrodturpin.dev` through its own Cloudflare Tunnel. See [audiobookshelf.md](audiobookshelf.md) |
 
 ## Storage
 
