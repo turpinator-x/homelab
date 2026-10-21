@@ -9,6 +9,7 @@ Following the [Flux repository structure guide](https://fluxcd.io/flux/guides/re
 ```
 apps/
 ├── base/                     # plain manifests, one folder per app
+│   ├── audiobookshelf/       # see audiobookshelf.md
 │   └── linkding/
 │       ├── kustomization.yaml
 │       ├── namespace.yaml
@@ -16,6 +17,8 @@ apps/
 │       ├── service.yaml      # ClusterIP Service on 9090
 │       └── storage.yaml      # PersistentVolumeClaim
 └── staging/                  # per-environment overlays that point at base
+    ├── kustomization.yaml    # lists the apps that are switched on
+    ├── audiobookshelf/
     └── linkding/
         ├── kustomization.yaml   # also generates linkding-configmap (staging settings)
         ├── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
@@ -55,6 +58,7 @@ flowchart LR
 ```
 
 - `clusters/staging/apps.yaml` is a Flux `Kustomization` (`kustomize.toolkit.fluxcd.io/v1`) with `path: ./apps/staging`, `interval: 1m0s` and `prune: true`, so removing an app's files from Git removes it from the cluster.
+- **Switching an app off and on:** `apps/staging/kustomization.yaml` lists the apps. Commenting a line out makes Flux prune that app's Deployments, Services and config; uncommenting brings them back. Its Namespace and PVCs carry `kustomize.toolkit.fluxcd.io/prune: disabled`, so the data stays. Both are needed: pruning a Namespace deletes every PVC in it, whatever the PVC's own annotation says.
 - The `kustomization.yaml` files are Kustomize's own (`kustomize.config.k8s.io/v1beta1`): the staging overlay pulls in the base and sets the namespace.
 
 ## Checking a deployment
@@ -79,7 +83,7 @@ Apps that keep data get a PersistentVolumeClaim in their base folder. With no `s
 
 - The volume is pinned to the node it was created on, so the pod can't move to the other node if that one goes down.
 - The requested size isn't enforced; the folder can grow into the node's free space.
-- The reclaim policy is `Delete`, so removing the claim from Git (with Flux pruning on) deletes the data. Backups and replicated storage are on the roadmap.
+- The reclaim policy is `Delete`, so deleting a claim deletes its folder. Flux won't do that on its own: every PVC and its Namespace are annotated `kustomize.toolkit.fluxcd.io/prune: disabled`, so removing an app from Git leaves its data in place (deleting it is a deliberate `kubectl delete pvc` or `kubectl delete namespace`). Backups and replicated storage are on the roadmap.
 
 ## Security
 

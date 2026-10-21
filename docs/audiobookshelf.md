@@ -46,7 +46,7 @@ The existing `apps` Flux Kustomization picks the folder up automatically.
 - **Hardened container:** `allowPrivilegeEscalation: false`, all Linux capabilities dropped, `seccompProfile: RuntimeDefault`.
 - **`strategy: Recreate`.** The database is SQLite in `/config`; a rolling update would briefly run two pods against it.
 - **Four volumes, not three.** The official compose file lists podcasts too. Sizes (1/5/50/20 Gi) are labels; local-path doesn't enforce them.
-- **PVCs carry `kustomize.toolkit.fluxcd.io/prune: disabled`,** so removing the app from Git can't delete the library. Deleting the data is a deliberate `kubectl delete pvc`.
+- **The PVCs and the Namespace carry `kustomize.toolkit.fluxcd.io/prune: disabled`,** so switching the app off (commenting it out of `apps/staging/kustomization.yaml`) or removing it from Git leaves the library in place. The Namespace needs it too: pruning a Namespace deletes every PVC inside it. That gap was in the first version and was found while comparing with the course solution; fixed in `5db5bae`. Deleting the data is a deliberate `kubectl delete pvc` or `kubectl delete namespace`.
 - **One tunnel per app** (`audiobookshelf`), created with `cloudflared tunnel create` and `cloudflared tunnel route dns` (the CNAME is created from the CLI, not the dashboard). The cloudflared Deployment is a copy of Linkding's: pinned image, non-root, `/ready` liveness probe.
 - **Admin account set over port-forward** in stage 2, before the app was public, so the root account couldn't be claimed by someone else. Audiobookshelf has no open sign-up.
 
