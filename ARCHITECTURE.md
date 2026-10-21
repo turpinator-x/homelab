@@ -68,3 +68,4 @@ flowchart LR
 - SSH key-only authentication with a hardened sshd config on every machine
 - Host firewalls on the servers allow SSH only from the workstations
 - Kubernetes Secrets are stored in Git only SOPS-encrypted; tokens, keys and kubeconfigs never are
+- The `main` branch, which Flux deploys from, is protected against force pushes and deletion

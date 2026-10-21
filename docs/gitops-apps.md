@@ -173,6 +173,8 @@ git config core.hooksPath .githooks
 
 `.gitignore` is the second layer: it blocks age keys, Cloudflare credential files, kubeconfigs and the k3s node token from being staged at all.
 
+**`main` is protected on GitHub** with a repository ruleset (`protect-main`, 2026-10-21): no force pushes and no deletion. `main` is what Flux deploys, so rewriting or deleting it would change or remove what runs in the cluster. Pull requests and status checks aren't required: I push to `main` directly and there's no CI yet. Pushes, merges, Renovate's branches and Flux's read-only deploy key are unaffected. To force-push on purpose (for example to scrub a leaked secret from history), switch the ruleset off, push, switch it back on.
+
 ## Automated updates: Renovate
 
 [Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`infrastructure/controllers/base/renovate`, GitHub App key in `infrastructure/controllers/staging/renovate`, applied by the `infra-controllers` Kustomization). Every hour it reads this repo, checks every container image and Helm chart for newer versions, and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
