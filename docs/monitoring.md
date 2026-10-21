@@ -21,7 +21,9 @@ monitoring/controllers/
 │   └── release.yaml          # HelmRelease: install options and values
 └── staging/kube-prometheus-stack/
     ├── kustomization.yaml
-    └── grafana-admin-secret.yaml   # Grafana login, SOPS-encrypted
+    ├── release-patch.yaml          # staging values: Grafana Ingress hostname and TLS
+    ├── grafana-admin-secret.yaml   # Grafana login, SOPS-encrypted
+    └── grafana-tls-secret.yaml     # self-signed certificate, SOPS-encrypted
 ```
 
 Same layout as Flux's [flux2-monitoring-example](https://github.com/fluxcd/flux2-monitoring-example), and the same base and overlay pattern as `apps/`.
@@ -33,6 +35,24 @@ Choices that differ from older guides:
 - **CRDs managed by Flux.** `install.crds: Create` and `upgrade.crds: CreateReplace`, because Helm on its own never upgrades CRDs.
 - **Drift detection on.** If someone edits a resource the chart created, Flux restores it.
 - **No password in values.** Grafana reads its admin login from the encrypted `grafana-admin` Secret (`grafana.admin.existingSecret`), so nothing sensitive is in the HelmRelease.
+
+## Grafana Ingress and TLS
+
+Grafana is at `https://grafana.home.arpa` on the LAN. I didn't write an Ingress: the chart creates one from its `grafana.ingress` values (found with `helm show values`). The values sit in a Kustomize patch in the staging overlay, because the hostname is environment-specific; Kustomize merges it into the base HelmRelease's values.
+
+```yaml
+# monitoring/controllers/staging/kube-prometheus-stack/release-patch.yaml (values part)
+grafana:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts: [grafana.home.arpa]
+    tls:
+      - secretName: grafana-tls
+        hosts: [grafana.home.arpa]
+```
+
+The certificate is self-signed (`openssl req -x509`, with the hostname in `subjectAltName`, which is the field browsers check). The key was generated in a temporary directory, turned into a `kubernetes.io/tls` Secret, encrypted with SOPS and the plaintext deleted, so the private key only exists encrypted in Git and decrypted in the cluster. Traefik serves it for that host instead of its default certificate. It expires after a year, and browsers warn because no trusted CA signed it; cert-manager with Let's Encrypt is the proper fix.
 
 ## k3s adjustments
 
@@ -55,5 +75,6 @@ At install (2026-10-20): all 18 targets up, including node-exporter on both node
 ## Not done yet
 
 - Prometheus keeps its data in an `emptyDir`, so a restart loses metric history (retention is 10 days). A PersistentVolumeClaim via `prometheus.prometheusSpec.storageSpec` is the next step.
-- Grafana and Prometheus are only reachable through `kubectl port-forward`. Access through Traefik ingress comes next.
+- Prometheus and Alertmanager are still only reachable through `kubectl port-forward`.
+- Grafana also still answers on plain HTTP; redirecting to HTTPS is a Traefik middleware away.
 - Alertmanager has no receivers configured, so alerts aren't sent anywhere yet.

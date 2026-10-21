@@ -20,6 +20,7 @@ apps/
         ├── kustomization.yaml   # also generates linkding-configmap (staging settings)
         ├── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
         ├── cloudflare-secret.yaml   # tunnel credentials, SOPS-encrypted
+        ├── ingress.yaml      # LAN hostname through Traefik
         └── linkding-container-env-secret.yaml   # Linkding admin account, SOPS-encrypted
 clusters/
 └── staging/
@@ -87,6 +88,23 @@ flowchart LR
 - **cloudflared runs from Git:** `apps/staging/linkding/cloudflare.yaml` holds the Deployment (2 replicas spread across both nodes, image pinned to a release, non-root) and a ConfigMap with the ingress rules: the hostname goes to `http://linkding:9090`, everything else gets a 404. It sits in the staging overlay because the hostname is environment-specific.
 - **Django behind a proxy:** Linkding gets `LD_CSRF_TRUSTED_ORIGINS=https://linkding.jarrodturpin.dev` from the staging ConfigMap (see Configuration), otherwise logins through the tunnel fail CSRF checks.
 - **Verify:** `kubectl logs -n linkding deploy/cloudflared | grep "Registered tunnel connection"` and `cloudflared tunnel info homelab`.
+
+## LAN access: Traefik Ingress
+
+Besides the public tunnel, Linkding has a LAN-only hostname, `linkding.home.arpa`, through the Traefik ingress controller that ships with k3s (default IngressClass `traefik`, exposed on ports 80 and 443 of both nodes by k3s's ServiceLB).
+
+```mermaid
+flowchart LR
+    B["Browser<br>linkding.home.arpa"] -- "/etc/hosts → node IP" --> N["Node :80 / :443<br>ServiceLB"]
+    N --> T["Traefik<br>matches the Host header"]
+    T -- "Ingress linkding" --> S["Service linkding:9090"]
+    T -- "Ingress kube-prometheus-stack-grafana" --> G["Service Grafana:80"]
+```
+
+- **Why `home.arpa`:** it's reserved for home networks (RFC 8375), so it can never clash with a real site. `.dev` names (like my public domain) are on the browsers' HSTS preload list, which forces HTTPS and blocks clicking past a self-signed certificate.
+- **Name resolution:** no local DNS server yet, so the names are in `/etc/hosts` on the workstations. Check with `getent hosts <name>`; `nslookup` asks DNS directly and ignores the hosts file.
+- **Exposure:** ServiceLB forwards ports 80 and 443 to Traefik, and forwarded traffic doesn't pass ufw's input rules, so every Ingress is reachable from the whole LAN. Nothing is reachable from the internet (no router port forwards; the Traefik Service is IPv4 only). Everything published this way has its own login.
+- **Gotcha:** a browser proxy (in my case a VPN extension) sends `*.home.arpa` to the proxy instead of reading `/etc/hosts`, which shows up as a 404. curl working while the browser fails points at the browser. Fix: exclude `home.arpa` from the proxy.
 
 ## Configuration
 

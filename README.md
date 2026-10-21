@@ -6,7 +6,7 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry. Next up: Traefik ingress.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Next up: automated image updates.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -31,7 +31,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [x] Persistent storage and non-root containers
 - [x] Secrets in Git, encrypted with SOPS and age, with a pre-commit guardrail
 - [x] Monitoring with kube-prometheus-stack, installed by a Flux HelmRelease
-- [ ] Traefik ingress on the cluster
+- [x] Traefik Ingress for LAN hostnames, Grafana with a SOPS-encrypted TLS certificate
 - [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
 - [ ] Automated image updates and a capstone project
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)
