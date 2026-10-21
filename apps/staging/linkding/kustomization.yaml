@@ -6,6 +6,7 @@ resources:
   - cloudflare.yaml
   - cloudflare-secret.yaml
   - linkding-container-env-secret.yaml
+  - ingress.yaml
 configMapGenerator:
   - name: linkding-configmap
     literals:
