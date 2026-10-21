@@ -186,6 +186,11 @@ flowchart LR
 - **`renovate.json`:** `config:recommended`, plus `managerFilePatterns` for two managers: `kubernetes` (container images in manifests) and `flux` (the chart version in the `OCIRepository`). Without the Flux manager, Helm charts are never updated.
 - **Flux's own files are excluded** (`ignorePaths: clusters/staging/flux-system/**`). Renovate would bump Flux's controller images one at a time; Flux is upgraded as a set with its CLI.
 - **The image is pinned** (`renovate/renovate:44.173.0`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
+- **The token expires every 90 days on purpose.** It's a fine-grained token limited to this repo, not a classic token with access to every repo and no expiry. When it expires only Renovate stops (Flux uses its own read-only deploy key). Rotation:
+  1. GitHub → Settings → Developer settings → Fine-grained tokens → the Renovate token → **Regenerate token** (same repo and permissions, new value).
+  2. `echo -n 'NEW_TOKEN' | base64 -w0`, then `sops infrastructure/controllers/staging/renovate/renovate-container-env-secret.yaml` and replace the `RENOVATE_TOKEN` value under `data:`. sops re-encrypts on save.
+  3. Commit and push; the pre-commit hook confirms the file is still encrypted.
+  4. `flux reconcile kustomization infra-controllers --with-source`, then test with `kubectl -n renovate create job --from=cronjob/renovate renovate-token-test` and check its logs for authentication errors. Nothing needs restarting: each hourly run starts a new pod that reads the Secret.
 - **Least privilege:** the GitHub token is fine-grained, limited to this repo (contents, pull requests, issues, commit statuses) and expires. It's the only credential in the cluster that can write to GitHub; Flux itself uses a read-only deploy key. The pod runs as non-root.
 - **First run (2026-10-20):** three PRs, all merged and rolled out by Flux: cloudflared 2026.10.1 → 2026.10.2, kube-prometheus-stack chart 92.10.1 → 92.11.0 (Helm upgrade to release v4), Linkding 1.31.0 → 1.47.0 (database migrations ran on start; all bookmarks intact).
 - **Habit:** `main` now moves on GitHub without me, so `git pull` before every change.
