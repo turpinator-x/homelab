@@ -28,7 +28,7 @@ infrastructure/
     │   └── renovate/         # Namespace, ConfigMap, CronJob
     └── staging/
         ├── kustomization.yaml   # lists the controllers that are switched on
-        └── renovate/         # token Secret, SOPS-encrypted
+        └── renovate/         # GitHub App private key, SOPS-encrypted
 monitoring/
 └── controllers/              # kube-prometheus-stack (see monitoring.md)
 clusters/
@@ -170,12 +170,13 @@ git config core.hooksPath .githooks
 
 ## Automated updates: Renovate
 
-[Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`infrastructure/controllers/base/renovate`, token Secret in `infrastructure/controllers/staging/renovate`, applied by the `infra-controllers` Kustomization). Every hour it reads this repo, checks every container image and Helm chart for newer versions, and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
+[Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`infrastructure/controllers/base/renovate`, GitHub App key in `infrastructure/controllers/staging/renovate`, applied by the `infra-controllers` Kustomization). Every hour it reads this repo, checks every container image and Helm chart for newer versions, and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
 
 ```mermaid
 flowchart LR
-    C["CronJob renovate<br>@hourly"] --> J["Job → Renovate pod"]
-    J -- "fine-grained token<br>(this repo only)" --> GH["GitHub: this repo"]
+    C["CronJob renovate<br>@hourly"] --> I["init container<br>key → JWT → 1-hour token"]
+    I -- "installation token<br>(this repo only)" --> J["Renovate container"]
+    J --> GH["GitHub: this repo"]
     J -- "any newer versions?" --> R["Docker Hub, ghcr.io"]
     J -- "opens PRs" --> GH
     GH -- "I review and merge" --> M["main"]
@@ -185,13 +186,17 @@ flowchart LR
 - **Merging is deploying.** Flux applies whatever lands on `main`, so each Renovate PR is a change request: read the release notes, merge, watch the rollout. No automerge.
 - **`renovate.json`:** `config:recommended`, plus `managerFilePatterns` for two managers: `kubernetes` (container images in manifests) and `flux` (the chart version in the `OCIRepository`). Without the Flux manager, Helm charts are never updated.
 - **Flux's own files are excluded** (`ignorePaths: clusters/staging/flux-system/**`). Renovate would bump Flux's controller images one at a time; Flux is upgraded as a set with its CLI.
-- **The image is pinned** (`renovate/renovate:44.173.0`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
-- **The token expires every 90 days on purpose.** It's a fine-grained token limited to this repo, not a classic token with access to every repo and no expiry. When it expires only Renovate stops (Flux uses its own read-only deploy key). Rotation:
-  1. GitHub → Settings → Developer settings → Fine-grained tokens → the Renovate token → **Regenerate token** (same repo and permissions, new value).
-  2. `echo -n 'NEW_TOKEN' | base64 -w0`, then `sops infrastructure/controllers/staging/renovate/renovate-container-env-secret.yaml` and replace the `RENOVATE_TOKEN` value under `data:`. sops re-encrypts on save.
-  3. Commit and push; the pre-commit hook confirms the file is still encrypted.
-  4. `flux reconcile kustomization infra-controllers --with-source`, then test with `kubectl -n renovate create job --from=cronjob/renovate renovate-token-test` and check its logs for authentication errors. Nothing needs restarting: each hourly run starts a new pod that reads the Secret.
-- **Least privilege:** the GitHub token is fine-grained, limited to this repo (contents, pull requests, issues, commit statuses) and expires. It's the only credential in the cluster that can write to GitHub; Flux itself uses a read-only deploy key. The pod runs as non-root.
+- **The image is pinned** (`renovate/renovate:44.175.3`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
+- **Renovate signs in as a GitHub App, with 1-hour tokens.** A private GitHub App (`turpinator-x-renovate`) is installed on this repo only, with Contents, Pull requests, Issues, Commit statuses and Checks read/write and Dependabot alerts read. Its private key is the one long-lived secret (SOPS-encrypted in Git). Each run:
+  1. The init container (same Renovate image, `node mint-token.mjs` from a generated ConfigMap) signs a 9-minute JWT with the key.
+  2. GitHub exchanges it for an installation token that expires in one hour.
+  3. The token is written to a memory-only `emptyDir` as Renovate's config file (`RENOVATE_CONFIG_FILE`), and the Renovate container starts.
+
+  Only the init container mounts the private key; Renovate only ever sees the 1-hour token. Nothing needs renewing, and PRs come from `turpinator-x-renovate[bot]` rather than a personal account. This replaced a 90-day fine-grained personal token on 2026-10-21; personal tokens can't be created or regenerated through the API, so they can't be rotated automatically.
+- **Rotating the app key (optional, e.g. yearly):** generate a new key on the app's settings page, re-create `renovate-github-app-secret.yaml` with `kubectl create secret generic renovate-github-app --from-file=private-key.pem=<file> --dry-run=client -o yaml` and `sops -e -i`, push, test with a manual job, then delete the old key on GitHub and `shred -u` the download.
+- **When it fails:** `kubectl -n renovate logs job/<job> -c github-app-token`. `401` means a wrong Client ID or key; `404` a wrong installation ID or the app isn't installed on the repo.
+- **Switching identity orphans the old PRs and dashboard:** Renovate only manages issues and PRs it authored, so after the switch the old Dependency Dashboard and an open PR from the personal token had to be closed by hand.
+- **Least privilege:** the app is the only credential in the cluster that can write to GitHub, limited to this repo; Flux itself uses a read-only deploy key. Both containers run as non-root.
 - **First run (2026-10-20):** three PRs, all merged and rolled out by Flux: cloudflared 2026.10.1 → 2026.10.2, kube-prometheus-stack chart 92.10.1 → 92.11.0 (Helm upgrade to release v4), Linkding 1.31.0 → 1.47.0 (database migrations ran on start; all bookmarks intact).
 - **Habit:** `main` now moves on GitHub without me, so `git pull` before every change.
 - **Run it on demand:** `kubectl create job -n renovate --from=cronjob/renovate renovate-manual-<n>`, then `kubectl logs -n renovate -f job/renovate-manual-<n>`.
