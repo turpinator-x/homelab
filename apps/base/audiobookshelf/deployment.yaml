@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audiobookshelf
+  labels:
+    app: audiobookshelf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # SQLite database: never two pods at once
+  selector:
+    matchLabels:
+      app: audiobookshelf
+  template:
+    metadata:
+      labels:
+        app: audiobookshelf
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: srv1 # storage lives here
+      securityContext:
+        runAsUser: 1000 # the image's "node" user
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: audiobookshelf
+          image: ghcr.io/advplyr/audiobookshelf:2.37.1
+          envFrom:
+            - configMapRef:
+                name: audiobookshelf-configmap
+          ports:
+            - name: http
+              containerPort: 3005
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /metadata
+              name: metadata
+            - mountPath: /audiobooks
+              name: audiobooks
+            - mountPath: /podcasts
+              name: podcasts
+      volumes: # Stage 1: temporary, gone when the pod goes
+        - name: config
+          emptyDir: {}
+        - name: metadata
+          emptyDir: {}
+        - name: audiobooks
+          emptyDir: {}
+        - name: podcasts
+          emptyDir: {}
