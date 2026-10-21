@@ -152,3 +152,26 @@ git config core.hooksPath .githooks
 ```
 
 `.gitignore` is the second layer: it blocks age keys, Cloudflare credential files, kubeconfigs and the k3s node token from being staged at all.
+
+## Automated updates: Renovate
+
+[Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`apps/base/renovate`, token Secret in `apps/staging/renovate`). Every hour it reads this repo, checks every container image and Helm chart for newer versions, and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
+
+```mermaid
+flowchart LR
+    C["CronJob renovate<br>@hourly"] --> J["Job → Renovate pod"]
+    J -- "fine-grained token<br>(this repo only)" --> GH["GitHub: this repo"]
+    J -- "any newer versions?" --> R["Docker Hub, ghcr.io"]
+    J -- "opens PRs" --> GH
+    GH -- "I review and merge" --> M["main"]
+    M -- "Flux applies (1m)" --> K["Cluster"]
+```
+
+- **Merging is deploying.** Flux applies whatever lands on `main`, so each Renovate PR is a change request: read the release notes, merge, watch the rollout. No automerge.
+- **`renovate.json`:** `config:recommended`, plus `managerFilePatterns` for two managers: `kubernetes` (container images in manifests) and `flux` (the chart version in the `OCIRepository`). Without the Flux manager, Helm charts are never updated.
+- **Flux's own files are excluded** (`ignorePaths: clusters/staging/flux-system/**`). Renovate would bump Flux's controller images one at a time; Flux is upgraded as a set with its CLI.
+- **The image is pinned** (`renovate/renovate:44.173.0`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
+- **Least privilege:** the GitHub token is fine-grained, limited to this repo (contents, pull requests, issues, commit statuses) and expires. It's the only credential in the cluster that can write to GitHub; Flux itself uses a read-only deploy key. The pod runs as non-root.
+- **First run (2026-10-20):** three PRs, all merged and rolled out by Flux: cloudflared 2026.10.1 → 2026.10.2, kube-prometheus-stack chart 92.10.1 → 92.11.0 (Helm upgrade to release v4), Linkding 1.31.0 → 1.47.0 (database migrations ran on start; all bookmarks intact).
+- **Habit:** `main` now moves on GitHub without me, so `git pull` before every change.
+- **Run it on demand:** `kubectl create job -n renovate --from=cronjob/renovate renovate-manual-<n>`, then `kubectl logs -n renovate -f job/renovate-manual-<n>`.
