@@ -11,3 +11,7 @@ spec:
         ingressClassName: traefik
         hosts:
           - grafana.home.arpa
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.home.arpa
