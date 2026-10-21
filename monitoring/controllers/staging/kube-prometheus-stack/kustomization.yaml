@@ -4,3 +4,6 @@ namespace: monitoring
 resources:
   - ../../base/kube-prometheus-stack/
   - grafana-admin-secret.yaml
+
+patches:
+  - path: release-patch.yaml
