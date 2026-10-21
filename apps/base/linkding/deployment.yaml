@@ -36,6 +36,19 @@ spec:
         volumeMounts:
           - mountPath: /etc/linkding/data
             name: linkding-data
+
+      - name: linkding-tasks
+        image: sissbruecker/linkding:1.47.0
+        command: ["python", "manage.py", "run_huey", "-f"]
+        envFrom:
+          - configMapRef:
+              name: linkding-configmap
+        securityContext:
+          allowPrivilegeEscalation: false
+        volumeMounts:
+          - mountPath: /etc/linkding/data
+            name: linkding-data
+
       volumes:
         - name: linkding-data
           persistentVolumeClaim:
