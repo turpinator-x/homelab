@@ -17,7 +17,7 @@ spec:
             runAsNonRoot: true
           containers:
             - name: renovate
-              image: renovate/renovate:44.173.0
+              image: renovate/renovate:44.175.4
               args:
                 - turpinator-x/homelab
               envFrom:
