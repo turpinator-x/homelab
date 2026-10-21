@@ -58,12 +58,16 @@ spec:
               name: audiobooks
             - mountPath: /podcasts
               name: podcasts
-      volumes: # Stage 1: temporary, gone when the pod goes
+      volumes:
         - name: config
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: audiobookshelf-config
         - name: metadata
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: audiobookshelf-metadata
         - name: audiobooks
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: audiobookshelf-audiobooks
         - name: podcasts
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: audiobookshelf-podcasts
