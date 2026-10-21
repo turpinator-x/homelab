@@ -5,4 +5,8 @@ metadata:
 data:
   RENOVATE_PLATFORM: "github"
   RENOVATE_AUTODISCOVER: "false"
-  RENOVATE_GIT_AUTHOR: "Renovate Bot <bot@renovateapp.com>"
+  RENOVATE_CONFIG_FILE: "/token/config.json"
+  RENOVATE_USERNAME: "turpinator-x-renovate[bot]"
+  RENOVATE_GIT_AUTHOR: "turpinator-x-renovate[bot] <345903810+turpinator-x-renovate[bot]@users.noreply.github.com>"
+  GITHUB_APP_CLIENT_ID: "Iv23liLKQyTHHuroN3l3"
+  GITHUB_APP_INSTALLATION_ID: "173807387"

@@ -15,15 +15,46 @@ spec:
           restartPolicy: Never
           securityContext:
             runAsNonRoot: true
+          initContainers:
+            - name: github-app-token
+              image: renovate/renovate:44.175.3
+              command: ["node", "/scripts/mint-token.mjs"]
+              envFrom:
+                - configMapRef:
+                    name: renovate-configmap
+              securityContext:
+                allowPrivilegeEscalation: false
+              volumeMounts:
+                - name: token-script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: github-app-key
+                  mountPath: /app-key
+                  readOnly: true
+                - name: renovate-token
+                  mountPath: /token
           containers:
             - name: renovate
-              image: renovate/renovate:44.173.0
+              image: renovate/renovate:44.175.3
               args:
                 - turpinator-x/homelab
               envFrom:
                 - configMapRef:
                     name: renovate-configmap
-                - secretRef:
-                    name: renovate-container-env
               securityContext:
                 allowPrivilegeEscalation: false
+              volumeMounts:
+                - name: renovate-token
+                  mountPath: /token
+                  readOnly: true
+          volumes:
+            - name: token-script
+              configMap:
+                name: renovate-token-script
+            - name: github-app-key
+              secret:
+                secretName: renovate-github-app
+            - name: renovate-token
+              emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi

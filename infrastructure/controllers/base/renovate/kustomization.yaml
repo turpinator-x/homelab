@@ -4,3 +4,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - cronjob.yaml
+configMapGenerator:
+  - name: renovate-token-script
+    files:
+      - mint-token.mjs
