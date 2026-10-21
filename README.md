@@ -1,12 +1,14 @@
 # Homelab Build Log
 
+[![validate](https://github.com/turpinator-x/homelab/actions/workflows/validate.yaml/badge.svg)](https://github.com/turpinator-x/homelab/actions/workflows/validate.yaml)
+
 A self-hosted, multi-node Kubernetes platform run with GitOps, built while moving from enterprise IT into Platform and Cloud Engineering.
 
 I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boeing. This repo documents the homelab I'm building: the cluster, how it's deployed, what broke along the way, and what's next. Hands-on coursework (Bash, Docker, Kubernetes manifests, container networking labs) lives in my [lab repo](https://github.com/turpinator-x/lab).
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. Next up: trusted LAN certificates with cert-manager.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. Every push and pull request is validated by GitHub Actions: each Flux path is built and checked against Kubernetes and Flux schemas with kubeconform. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. Next up: trusted LAN certificates with cert-manager.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -35,6 +37,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [ ] LAN DNS and trusted certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare) and a wildcard `*.lab` record, so every device on the network reaches the apps by name with no hosts files or certificate warnings
 - [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
 - [x] Automated dependency updates with Renovate (self-hosted CronJob, PRs reviewed before Flux deploys)
+- [x] CI: every push and PR validated with GitHub Actions and kubeconform (strict schemas, SHA-pinned actions, same script runs locally)
 - [x] Capstone: Audiobookshelf translated from Docker Compose to Kubernetes and deployed through GitOps (persistent volumes, non-root, public through its own Cloudflare Tunnel)
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)
 - [ ] CKA certification
