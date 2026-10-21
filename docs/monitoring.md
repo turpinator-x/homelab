@@ -50,7 +50,7 @@ kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:909
 curl -s localhost:9090/api/v1/targets | jq -r '.data.activeTargets[] | "\(.health) \(.labels.job)"' | sort | uniq -c
 ```
 
-At install (2026-10-19): all 18 targets up, including node-exporter on both nodes. The only firing alert is `Watchdog`, which always fires on purpose to prove the alerting pipeline works. The whole stack uses about 1.2 GiB of memory.
+At install (2026-10-20): all 18 targets up, including node-exporter on both nodes. The only firing alert is `Watchdog`, which always fires on purpose to prove the alerting pipeline works. The whole stack uses about 1.2 GiB of memory.
 
 ## Not done yet
 
