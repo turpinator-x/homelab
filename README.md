@@ -6,7 +6,7 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Next up: monitoring and Traefik ingress.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry. Next up: Traefik ingress.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -14,7 +14,7 @@ srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0
 ubuntusrvpi   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed, and [docs/monitoring.md](docs/monitoring.md) for monitoring.
 
 ## Roadmap
 
@@ -26,10 +26,12 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [x] Multi-node k3s cluster (mixed amd64 and arm64)
 - [x] GitOps with FluxCD: Flux bootstrapped and managing itself from this repo
 - [x] First app deployed through Flux with Kustomize base/overlay layout (Linkding)
-- [ ] Infrastructure and more apps through Flux (HelmReleases)
+- [x] First Helm chart through Flux (HelmRelease from an OCIRepository)
+- [ ] More infrastructure and apps through Flux
 - [x] Persistent storage and non-root containers
 - [x] Secrets in Git, encrypted with SOPS and age, with a pre-commit guardrail
-- [ ] Monitoring and Traefik ingress on the cluster
+- [x] Monitoring with kube-prometheus-stack, installed by a Flux HelmRelease
+- [ ] Traefik ingress on the cluster
 - [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
 - [ ] Automated image updates and a capstone project
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)

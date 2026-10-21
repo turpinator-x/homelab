@@ -33,11 +33,12 @@ flowchart LR
 
 - **Distribution:** k3s, installed with the official script. It bundles containerd, Flannel networking, CoreDNS, Traefik ingress, ServiceLB, local-path storage, and metrics-server.
 - **Mixed architecture:** the control plane is amd64 and the worker is arm64, so every image needs builds for both.
-- **Network policy at the host:** ufw on both nodes allows only what the cluster needs: the API server (6443/tcp) from the LAN, kubelet (10250/tcp) and Flannel VXLAN (8472/udp) between the two nodes, and the pod and service networks.
+- **Network policy at the host:** ufw on both nodes allows only what the cluster needs: the API server (6443/tcp) from the LAN, kubelet (10250/tcp), Flannel VXLAN (8472/udp) and node-exporter (9100/tcp) between the two nodes, and the pod and service networks.
 - **GitOps:** FluxCD v2.9 runs in the `flux-system` namespace. It checks this repo every minute and applies `clusters/staging` (with pruning, so anything removed from Git is removed from the cluster). Flux authenticates with a read-only SSH deploy key; no GitHub token is stored in the cluster.
 - **Public access:** a Cloudflare Tunnel. Two `cloudflared` pods (one on each node) hold outbound connections to Cloudflare, which forwards requests for `linkding.jarrodturpin.dev` to the Linkding Service. No router ports are open and the home IP isn't published in DNS. The tunnel credentials are a SOPS-encrypted Secret in Git.
 - **Secrets:** committed to this repo encrypted with SOPS and age. Flux decrypts them with a private key held in one Secret created by hand; a pre-commit hook blocks unencrypted Secrets and leaked credentials.
-- **Next:** monitoring and Traefik ingress.
+- **Monitoring:** kube-prometheus-stack (Prometheus, Alertmanager, Grafana, node-exporter on both nodes) installed by a Flux HelmRelease from an OCI chart registry, with the Grafana login in a SOPS Secret. See [docs/monitoring.md](docs/monitoring.md).
+- **Next:** Traefik ingress.
 
 ## Sync Strategy
 

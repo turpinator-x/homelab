@@ -33,13 +33,17 @@ sudo ufw allow from <pi-ip> to any port 10250 proto tcp         # kubelet
 sudo ufw allow from <pi-ip> to any port 8472 proto udp          # Flannel VXLAN
 sudo ufw allow from 10.42.0.0/16 to any                         # pod network
 sudo ufw allow from 10.43.0.0/16 to any                         # service network
+sudo ufw allow from <pi-ip> to any port 9100 proto tcp          # node-exporter (added for monitoring)
 
 # ubuntusrvpi
 sudo ufw allow from <srv1-ip> to any port 10250 proto tcp
 sudo ufw allow from <srv1-ip> to any port 8472 proto udp
 sudo ufw allow from 10.42.0.0/16 to any
 sudo ufw allow from 10.43.0.0/16 to any
+sudo ufw allow from <srv1-ip> to any port 9100 proto tcp
 ```
+
+Pods reaching the *other node's* IP (for example Prometheus scraping node-exporter, which runs on the host network) arrive with the sending node's address, not a pod address, so they need a node-to-node rule like the kubelet's.
 
 ## 4. Join the Pi as an agent
 
