@@ -84,6 +84,10 @@ Blocked connections are refused rather than timing out: kube-router rejects them
 - **Dockerfile:** two stages (uv only in the build stage), dependencies installed before the code is copied for layer caching, `chmod -R a+rX main.py static` so the image doesn't depend on the builder's file permissions, `USER 10001`.
 - **Releasing a new version:** bump `version` in `pyproject.toml`, commit, `git tag v0.x.y && git push origin v0.x.y`, then update the image tag in `apps/base/dashboard/deployment.yaml` (or merge the Renovate PR).
 
+## Updates
+
+Renovate (the same in-cluster CronJob and GitHub App as this repo) also manages the app repo since 2026-10-21: the app was added to the GitHub App's selected repositories and to the CronJob's `args`, and the app repo has its own `renovate.json`. It tracks 20 dependencies there: the Python and uv images in the Dockerfile, `.python-version`, the Python packages in `pyproject.toml`/`uv.lock`, and the SHA-pinned actions. Each PR runs the app's CI (tests plus both image builds) before I merge it; a merge is then released with a version tag, and Renovate in this repo opens the PR that deploys the new image tag.
+
 ## Problems hit
 
 - **`PermissionError: /app/main.py` in the container.** Some local tools had written `main.py` and `index.html` as mode 600; `COPY` keeps the mode, root owned them, and UID 10001 couldn't read its own code. Fixed in the Dockerfile with `chmod -R a+rX main.py static` rather than locally, so the image is the same whoever builds it. (A first version ran `chmod -R` over all of `/app`, which took 16 s walking the virtualenv; narrowed to the two copied paths.)
@@ -102,6 +106,5 @@ Result on 2026-10-21: one dashboard pod and two cloudflared pods (one per node),
 
 ## Next
 
-- Renovate on the app repo (Python, base image, uv, actions).
 - Uptime Kuma as a second data source (response times, uptime %).
 - A `/metrics` endpoint so Prometheus scrapes the dashboard itself.
