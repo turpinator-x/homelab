@@ -82,6 +82,7 @@ Blocked connections are refused rather than timing out: kube-router rejects them
 - **Registry:** GHCR, public package. The push logs in with the workflow's own `GITHUB_TOKEN`, so there's no registry password anywhere, and the cluster pulls without credentials.
 - **Supply chain:** actions pinned by commit SHA, job permissions minimal (`packages: write` only on the image job), build provenance (`mode=max`) and an SBOM attached to every image.
 - **Dockerfile:** two stages (uv only in the build stage), dependencies installed before the code is copied for layer caching, `chmod -R a+rX main.py static` so the image doesn't depend on the builder's file permissions, `USER 10001`.
+- **Repository rulesets** (2026-10-21): `protect-main` blocks force pushes and deletion of `main` (same as this repo, see [gitops-apps.md](gitops-apps.md)); `protect-release-tags` blocks updating or deleting any `v*` tag, so a published version can't be moved or removed (the rule learned from `v0.1.1`, see Problems hit). Creating new tags, direct pushes and Renovate PRs are unaffected; no required checks, for the same reason as here.
 - **Releasing a new version:** bump `version` in `pyproject.toml`, commit, `git tag v0.x.y && git push origin v0.x.y`, then update the image tag in `apps/base/dashboard/deployment.yaml` (or merge the Renovate PR).
 
 ## Updates
