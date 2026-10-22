@@ -10,6 +10,7 @@ Following the [Flux repository structure guide](https://fluxcd.io/flux/guides/re
 apps/
 ├── base/                     # plain manifests, one folder per app
 │   ├── audiobookshelf/       # see audiobookshelf.md
+│   ├── dashboard/            # see dashboard.md
 │   └── linkding/
 │       ├── kustomization.yaml
 │       ├── namespace.yaml
@@ -19,6 +20,7 @@ apps/
 └── staging/                  # per-environment overlays that point at base
     ├── kustomization.yaml    # lists the apps that are switched on
     ├── audiobookshelf/
+    ├── dashboard/
     └── linkding/
         ├── kustomization.yaml   # also generates linkding-configmap (staging settings)
         ├── cloudflare.yaml   # cloudflared Deployment + ConfigMap (staging hostname)
@@ -79,6 +81,7 @@ kubectl port-forward -n linkding deploy/linkding 8080:9090   # then http://local
 |---|---|---|
 | [Linkding](https://github.com/sissbruecker/linkding) | Self-hosted bookmark manager | Deployed (2026-10-15) with a 1Gi PVC on k3s local-path storage for its SQLite database. Runs as non-root (UID 33, `www-data`) with privilege escalation disabled; background tasks run in a second container in the same pod. Public at `https://linkding.jarrodturpin.dev` through a Cloudflare Tunnel (2026-10-17) |
 | [Audiobookshelf](https://github.com/advplyr/audiobookshelf) | Audiobook and podcast server (course capstone) | Deployed (2026-10-21), translated from the project's Docker Compose file: four PVCs on srv1, non-root (UID 1000), `Recreate` strategy for its SQLite database, health probes. Public at `https://audiobooks.jarrodturpin.dev` through its own Cloudflare Tunnel. See [audiobookshelf.md](audiobookshelf.md) |
+| [Dashboard](https://github.com/turpinator-x/homelab-dashboard) | My own public status page (Python, FastAPI) | Deployed (2026-10-21) from a multi-arch image on GHCR built by my app repo's CI. Reads fixed queries from Prometheus with a 15 s cache; no API token, restricted security context, read-only root filesystem, and the first NetworkPolicy (in: cloudflared only; out: DNS + Prometheus only). Public at `https://dashboard.jarrodturpin.dev`. See [dashboard.md](dashboard.md) |
 
 ## Storage
 

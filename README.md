@@ -8,7 +8,7 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 
 ## Current Status
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. Every push and pull request is validated by GitHub Actions: each Flux path is built and checked against Kubernetes and Flux schemas with kubeconform. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. Next up: trusted LAN certificates with cert-manager.
+**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. Every push and pull request is validated by GitHub Actions: each Flux path is built and checked against Kubernetes and Flux schemas with kubeconform. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. A live public status page I built in Python, [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard), is at `dashboard.jarrodturpin.dev`: it reads cluster numbers from Prometheus, ships as a multi-arch image built by GitHub Actions, and is locked down with a NetworkPolicy and the restricted pod security settings. Next up: trusted LAN certificates with cert-manager.
 
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -16,7 +16,7 @@ srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0
 ubuntusrvpi   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, and [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone, and [docs/dashboard.md](docs/dashboard.md) for the public dashboard.
 
 ## Roadmap
 
@@ -39,6 +39,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 - [x] Automated dependency updates with Renovate (self-hosted CronJob, PRs reviewed before Flux deploys)
 - [x] CI: every push and PR validated with GitHub Actions and kubeconform (strict schemas, SHA-pinned actions, same script runs locally)
 - [x] Capstone: Audiobookshelf translated from Docker Compose to Kubernetes and deployed through GitOps (persistent volumes, non-root, public through its own Cloudflare Tunnel)
+- [x] Public homelab dashboard: my own Python (FastAPI) app reading Prometheus, multi-arch image built and published by GitHub Actions to GHCR, deployed by Flux with a NetworkPolicy and restricted pod security
 - [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)
 - [ ] CKA certification
 
@@ -115,6 +116,7 @@ Platform engineering and other:
 
 ## Related Repos
 
+- [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard): source, tests, Dockerfile and CI for the public dashboard
 - [lab](https://github.com/turpinator-x/lab): course exercises (Bash, Docker, Kubernetes YAML, containerlab networking write-ups)
 - `dotfiles` (private): chezmoi-managed configuration for all four machines
 - `python-docker-ai` (private): the local AI PDF Q&A stack
