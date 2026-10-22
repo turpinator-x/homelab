@@ -77,7 +77,7 @@ Blocked connections are refused rather than timing out: kube-router rejects them
 
 ## Build and release (app repo)
 
-- **Python 3.14, uv, FastAPI, httpx, pytest, ruff.** `uv.lock` pins every dependency; the laptop, CI and the image all install from it.
+- **Python 3.15** (started on 3.14; Renovate's first PR moved it, see Updates), **uv, FastAPI, httpx, pytest, ruff.** `uv.lock` pins every dependency; the laptop, CI and the image all install from it.
 - **CI** (`.github/workflows/ci.yaml`): on every push and PR, `ruff format --check`, `ruff check`, `pytest` (6 tests, Prometheus faked with `monkeypatch`), then a `buildx` build for both architectures under QEMU. Only a `v*` tag pushes the image. About 1 minute end to end.
 - **Registry:** GHCR, public package. The push logs in with the workflow's own `GITHUB_TOKEN`, so there's no registry password anywhere, and the cluster pulls without credentials.
 - **Supply chain:** actions pinned by commit SHA, job permissions minimal (`packages: write` only on the image job), build provenance (`mode=max`) and an SBOM attached to every image.
@@ -88,10 +88,19 @@ Blocked connections are refused rather than timing out: kube-router rejects them
 
 Renovate (the same in-cluster CronJob and GitHub App as this repo) also manages the app repo since 2026-10-21: the app was added to the GitHub App's selected repositories and to the CronJob's `args`, and the app repo has its own `renovate.json`. It tracks 20 dependencies there: the Python and uv images in the Dockerfile, `.python-version`, the Python packages in `pyproject.toml`/`uv.lock`, and the SHA-pinned actions. Each PR runs the app's CI (tests plus both image builds) before I merge it; a merge is then released with a version tag, and Renovate in this repo opens the PR that deploys the new image tag.
 
+First full run, 2026-10-21: Renovate PR #1 in the app repo (Python 3.14 → 3.15, CI green on both architectures) → merged → `v0.1.2` tagged → image published → Renovate PR #12 here (image `0.1.0` → `0.1.2`, `validate` green) → merged → Flux rolled it out. The pod now runs `0.1.2` on Python 3.15.1.
+
+```
+app repo:  Renovate PR → CI (tests + amd64/arm64 build) → merge → commit + tag vX.Y.Z → CI publishes image
+homelab:   Renovate PR (image tag) → validate CI → merge → Flux deploys
+```
+
 ## Problems hit
 
 - **`PermissionError: /app/main.py` in the container.** Some local tools had written `main.py` and `index.html` as mode 600; `COPY` keeps the mode, root owned them, and UID 10001 couldn't read its own code. Fixed in the Dockerfile with `chmod -R a+rX main.py static` rather than locally, so the image is the same whoever builds it. (A first version ran `chmod -R` over all of `/app`, which took 16 s walking the virtualenv; narrowed to the two copied paths.)
 - **`kubectl diff -k` showed nothing for the new app**, because the `dashboard` namespace didn't exist yet. `scripts/validate.sh` is the pre-push check that matters for a brand-new app.
+
+- **A tag on the wrong commit.** `v0.1.1` was tagged before pulling the merged PR and before committing the version bump, so it was built from the old code. Tags are never moved or deleted once published (a registry, Renovate or a node may already have it), so `v0.1.1` was left as a skipped version and the fix shipped as `v0.1.2`. Order that works: pull, bump the version, commit, tag, push both.
 
 ## Verify
 
