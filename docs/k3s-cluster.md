@@ -92,6 +92,22 @@ The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-serve
 
 ## Maintenance log
 
+### 2026-10-23: App volumes switched to Retain
+
+**Why:** every app volume (Linkding's data, Audiobookshelf's config, metadata, audiobooks and podcasts) uses k3s's `local-path` class, whose reclaim policy is `Delete`: if a PersistentVolumeClaim is deleted, k3s deletes the folder on srv1 with it. Flux already can't prune these claims (`prune: disabled`), but a mistaken `kubectl delete pvc` or `kubectl delete namespace` would still wipe the data.
+
+**Change:** each PersistentVolume was patched in place, with no restarts:
+
+```bash
+kubectl patch pv <pv-name> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+```
+
+Linkding's volume went first and was checked, then the four Audiobookshelf volumes. All five now show `Retain` and `Bound`, and both apps kept running.
+
+**What it means:** deleting a claim now leaves the PersistentVolume in a `Released` state with its data still on srv1. Getting it back means clearing the volume's old `claimRef` so a new claim can bind, or copying the folder out; cleaning up means deleting the PV and then the folder by hand. The PVs aren't in Git (k3s creates them), so Flux doesn't undo the patch. New claims still start as `Delete` until there is a `Retain` StorageClass.
+
+**Still true:** the volumes are pinned to srv1, so these apps can't fail over to the Pi. That changes only with network or replicated storage (a Synology NAS over iSCSI, or Longhorn), which is on the roadmap.
+
 ### 2026-10-22: Pi WiFi stall, watchdog, and rename to srvpi01
 
 **What happened:** the Pi went `NotReady` for about three hours. Its WiFi stopped passing traffic (k3s logged `connect: no route to host` to the server, and sysstat showed `wlan0` falling from about 1,500 to under 1 packet per second), but the interface never reported a disconnect, so nothing tried to reconnect. The OS kept running. Kubernetes rescheduled the Pi's pods (the cloudflared replicas, the Prometheus operator) onto srv1, and the public apps stayed up throughout. A power cycle brought it back.

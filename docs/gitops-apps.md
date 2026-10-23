@@ -89,7 +89,7 @@ Apps that keep data get a PersistentVolumeClaim in their base folder. With no `s
 
 - The volume is pinned to the node it was created on, so the pod can't move to the other node if that one goes down.
 - The requested size isn't enforced; the folder can grow into the node's free space.
-- The reclaim policy is `Delete`, so deleting a claim deletes its folder. Flux won't do that on its own: every PVC and its Namespace are annotated `kustomize.toolkit.fluxcd.io/prune: disabled`, so removing an app from Git leaves its data in place (deleting it is a deliberate `kubectl delete pvc` or `kubectl delete namespace`). Backups and replicated storage are on the roadmap.
+- The class's reclaim policy is `Delete`, so by default deleting a claim deletes its folder. The existing volumes were switched to `Retain` on 2026-10-23 (see the maintenance log in [k3s-cluster.md](k3s-cluster.md)), so their data now survives even a deliberate delete; new claims still start as `Delete` and need the same patch. Flux won't delete claims on its own either: every PVC and its Namespace are annotated `kustomize.toolkit.fluxcd.io/prune: disabled`, so removing an app from Git leaves its data in place (deleting it is a deliberate `kubectl delete pvc` or `kubectl delete namespace`). Backups and replicated storage are on the roadmap.
 
 ## Security
 
