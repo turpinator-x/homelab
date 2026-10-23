@@ -2,6 +2,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: linkding
+  annotations:
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/name: Linkding
+    gethomepage.dev/description: Bookmarks (LAN)
+    gethomepage.dev/group: Homelab (LAN)
+    gethomepage.dev/icon: linkding.png
+    gethomepage.dev/pod-selector: app=linkding
 spec:
   ingressClassName: traefik
   rules:
