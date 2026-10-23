@@ -2,7 +2,7 @@
 
 A live public status page for the cluster: **https://dashboard.jarrodturpin.dev** (2026-10-21).
 
-It shows CPU and memory across both nodes, running pods, nodes ready, uptime, and whether each app is up, refreshed every 15 seconds. The app is my own: a small Python (FastAPI) service in its own repo, [turpinator-x/homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard), built into a multi-arch image by GitHub Actions and deployed here by Flux. The project idea came from the KubeCraft community (the "Homelab Apps & Projects" track); the build is mine, with Claude Code as tutor. I typed the backend; Claude Code generated the frontend.
+It shows CPU and memory across both nodes, running pods, nodes ready, uptime, and whether each app is up, refreshed every 15 seconds. The app is a small Python (FastAPI) service in its own repo, [turpinator-x/homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard), built into a multi-arch image by GitHub Actions and deployed here by Flux. The project idea came from the KubeCraft community (the "Homelab Apps & Projects" track). It is AI-assisted: Claude Code wrote the application code (backend, frontend, tests, Dockerfile and CI workflow) and explained each part, while I set the requirements, typed the commands and pasted and edited the code myself, and reviewed, ran and debugged it. The platform side in this doc (CI, image, deployment, pod security, NetworkPolicy) is where my own work is.
 
 ```mermaid
 flowchart LR
