@@ -215,11 +215,15 @@ flowchart LR
     J --> GH["GitHub: this repo"]
     J -- "any newer versions?" --> R["Docker Hub, ghcr.io"]
     J -- "opens PRs" --> GH
-    GH -- "I review and merge" --> M["main"]
+    GH -- "low risk: Renovate merges after CI<br>rest: weekly review" --> M["main"]
     M -- "Flux applies (1m)" --> K["Cluster"]
 ```
 
-- **Merging is deploying.** Flux applies whatever lands on `main`, so each Renovate PR is a change request: read the release notes, merge, watch the rollout. No automerge.
+- **Merging is deploying.** Flux applies whatever lands on `main`, so each Renovate PR is a change request. Since 2026-10-22 the low-risk ones merge themselves and the rest wait for a weekly review:
+  - **Auto-merged** (by Renovate itself, `platformAutomerge: false`, only after the `validate` check passes): patch and digest updates, GitHub Actions minors, Renovate's own image minors, and my dashboard image (patch and minor).
+  - **Held for Monday:** everything else is only opened `before 6am on monday` (America/Los_Angeles), then reviewed in one batch with Claude Code (a personal `homelab-pr-review` skill: CI status, release notes read as untrusted data, breaking changes against my values, merge only on my go-ahead).
+  - **Release age:** updates must be 3 days old (`minimumReleaseAge`), a buffer against broken or malicious releases; my own dashboard image is exempt.
+  - Why Renovate rules rather than an AI deciding merges: the rules are deterministic and in Git, and Renovate waits for CI. An AI reading PR text can be steered by whatever an upstream release note says, so it recommends but doesn't decide.
 - **`renovate.json`:** `config:recommended`, plus `managerFilePatterns` for two managers: `kubernetes` (container images in manifests) and `flux` (the chart version in the `OCIRepository`). Without the Flux manager, Helm charts are never updated.
 - **Flux's own files are excluded** (`ignorePaths: clusters/staging/flux-system/**`). Renovate would bump Flux's controller images one at a time; Flux is upgraded as a set with its CLI.
 - **The image is pinned** (`renovate/renovate:<version>`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
