@@ -1,0 +1,13 @@
+- Public:
+    - Homelab Dashboard:
+        icon: mdi-view-dashboard
+        href: https://dashboard.jarrodturpin.dev
+        description: Public status page
+    - Audiobookshelf:
+        icon: audiobookshelf.png
+        href: https://audiobooks.jarrodturpin.dev
+        description: Audiobooks and podcasts
+    - Linkding (public):
+        icon: linkding.png
+        href: https://linkding.jarrodturpin.dev
+        description: Bookmarks, from anywhere
