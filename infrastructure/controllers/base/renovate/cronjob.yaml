@@ -17,7 +17,7 @@ spec:
             runAsNonRoot: true
           initContainers:
             - name: github-app-token
-              image: renovate/renovate:44.178.3
+              image: renovate/renovate:44.178.5
               command: ["node", "/scripts/mint-token.mjs"]
               envFrom:
                 - configMapRef:
@@ -35,7 +35,7 @@ spec:
                   mountPath: /token
           containers:
             - name: renovate
-              image: renovate/renovate:44.178.3
+              image: renovate/renovate:44.178.5
               args:
                 - turpinator-x/homelab
                 - turpinator-x/homelab-dashboard
