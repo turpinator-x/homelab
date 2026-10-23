@@ -15,7 +15,7 @@ kubeconform_args=(-strict -summary -skip Secret "${schemas[@]}")
 echo "== Flux Kustomizations in clusters/staging"
 kubeconform "${kubeconform_args[@]}" clusters/staging/*.yaml
 
-for dir in apps/staging infrastructure/controllers/staging monitoring/controllers/staging; do
+for dir in apps/staging infrastructure/controllers/staging infrastructure/configs/staging monitoring/controllers/staging; do
   echo "== $dir"
   kubectl kustomize "$dir" | kubeconform "${kubeconform_args[@]}" -
 done
