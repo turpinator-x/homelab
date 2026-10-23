@@ -10,7 +10,7 @@ flowchart LR
     end
     subgraph Cluster["k3s cluster (v1.36)"]
         SRV["srv1<br>control plane<br>amd64, wired"]
-        PI["ubuntusrvpi<br>worker<br>Raspberry Pi 5, arm64"]
+        PI["srvpi01<br>worker<br>Raspberry Pi 5, arm64"]
         PI -- "joins on :6443" --> SRV
         SRV <-- "Flannel VXLAN :8472/udp<br>kubelet :10250" --> PI
     end
@@ -27,7 +27,7 @@ flowchart LR
 - **Stealth (primary laptop):** daily workstation on Omarchy (Arch Linux). Manages the homelab cluster with `kubectl` and runs a separate local cluster in Rancher Desktop. The two are kept apart as separate `kubectl` contexts (`homelab` and `rancher-desktop`).
 - **odin (ThinkPad T480):** second Omarchy workstation, reached over SSH with key-only auth.
 - **srv1 (KAMRUI AM21 mini PC):** k3s server (control plane). AMD Ryzen 7 8745HS, 24 GB RAM, 1 TB NVMe, Ubuntu Server 26.04 LTS, wired network only.
-- **ubuntusrvpi (Raspberry Pi 5, 8 GB):** k3s agent (worker), Ubuntu Server 24.04 LTS.
+- **srvpi01 (Raspberry Pi 5, 8 GB):** k3s agent (worker), Ubuntu Server 24.04 LTS.
 
 ## Kubernetes
 

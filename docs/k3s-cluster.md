@@ -7,7 +7,7 @@ How the two-node cluster was built (October 2026), following the KubeCraft Kuber
 | Node | Role | Arch | OS |
 |------|------|------|----|
 | srv1 | server (control plane) | amd64 | Ubuntu Server 26.04 LTS |
-| ubuntusrvpi | agent (worker) | arm64 | Ubuntu Server 24.04 LTS |
+| srvpi01 (was ubuntusrvpi) | agent (worker) | arm64 | Ubuntu Server 24.04 LTS |
 
 ## 1. Prepare the hosts
 
@@ -35,7 +35,7 @@ sudo ufw allow from 10.42.0.0/16 to any                         # pod network
 sudo ufw allow from 10.43.0.0/16 to any                         # service network
 sudo ufw allow from <pi-ip> to any port 9100 proto tcp          # node-exporter (added for monitoring)
 
-# ubuntusrvpi
+# srvpi01
 sudo ufw allow from <srv1-ip> to any port 10250 proto tcp
 sudo ufw allow from <srv1-ip> to any port 8472 proto udp
 sudo ufw allow from 10.42.0.0/16 to any
@@ -79,7 +79,7 @@ kubectl get nodes -o wide
 ```
 NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
 srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0-38-generic (amd64)   containerd://2.3.4-k3s1.36
-ubuntusrvpi   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
+srvpi01   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
 The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-server) run on srv1, and a ServiceLB pod runs on each node, which confirms scheduling and networking work across both.
@@ -89,3 +89,22 @@ The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-serve
 - A literal `<token>` placeholder in a shell command is read as input redirection (`-bash: token: No such file or directory`). Put secrets in a variable instead.
 - The node token and `k3s.yaml` are credentials. Neither belongs in Git.
 - With two network interfaces on the same subnet, k3s may pick the wrong node IP. One wired interface (or `--node-ip` and `--flannel-iface`) avoids that.
+
+## Maintenance log
+
+### 2026-10-22: Pi WiFi stall, watchdog, and rename to srvpi01
+
+**What happened:** the Pi went `NotReady` for about three hours. Its WiFi stopped passing traffic (k3s logged `connect: no route to host` to the server, and sysstat showed `wlan0` falling from about 1,500 to under 1 packet per second), but the interface never reported a disconnect, so nothing tried to reconnect. The OS kept running. Kubernetes rescheduled the Pi's pods (the cloudflared replicas, the Prometheus operator) onto srv1, and the public apps stayed up throughout. A power cycle brought it back.
+
+**Fix (until it can be wired):** WiFi power saving was on, a common cause of stalls with the Pi's built-in WiFi. A small watchdog now runs every minute from a systemd timer (`/usr/local/sbin/wifi-watchdog`, `wifi-watchdog.service` + `.timer`):
+
+1. turns power saving off (it doesn't persist across reboots or reconnects);
+2. pings the default gateway;
+3. on failure, recovers in steps: restart the WiFi supplicant at about 2 minutes, reload the `brcmfmac` driver at about 4 minutes, reboot at about 10 minutes (only if up for more than an hour, so a router outage can't cause a reboot loop).
+
+Everything it does is logged: `journalctl -t wifi-watchdog`. The real fix is Ethernet, which is on the roadmap.
+
+**Rename:** `ubuntusrvpi` became `srvpi01` (numbered, in case more Pis join as control planes later). Steps: drain the node, set the hostname in **both** `/etc/hostname` (`hostnamectl`) and the cloud-init seed on the boot partition (`/boot/firmware/user-data`, which otherwise rewrites `/etc/hosts` with the old name on every boot), add `preserve_hostname: true`, reboot. k3s registered the Pi as a new node `srvpi01`; the old node object and its `ubuntusrvpi.node-password.k3s` secret were deleted.
+
+**Also noticed:** ufw logs IPv6 router solicitations between pods on the `cni0` bridge as `[UFW BLOCK]` (about 27,000 lines in one boot). Harmless, but noisy on an SD card; to be cleaned up.
+
