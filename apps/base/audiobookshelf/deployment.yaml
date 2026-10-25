@@ -17,7 +17,7 @@ spec:
         app: audiobookshelf
     spec:
       nodeSelector:
-        kubernetes.io/hostname: srvmini01 # storage lives here
+        kubernetes.io/hostname: minisrv01 # storage lives here
       securityContext:
         runAsUser: 1000 # the image's "node" user
         runAsGroup: 1000
