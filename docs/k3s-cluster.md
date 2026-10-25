@@ -12,7 +12,7 @@ How the two-node cluster was built (October 2026), following the KubeCraft Kuber
 ## 1. Prepare the hosts
 
 - Updated both machines (`apt update && apt upgrade`).
-- Put srv1 on its wired link only: removed the WiFi section from netplan and blacklisted the WiFi driver, so k3s can't register the node on the wrong interface.
+- Put srv1 on its wired link only (the Pi followed on 2026-10-25, see the maintenance log): removed the WiFi section from netplan and blacklisted the WiFi driver, so k3s can't register the node on the wrong interface.
 - Checked that cgroup v2 with the memory controller is enabled (`cat /sys/fs/cgroup/cgroup.controllers`). Ubuntu's Raspberry Pi kernel already enables it, so the `cgroup_enable=memory` boot parameter from Raspberry Pi OS guides wasn't needed.
 
 ## 2. Install the server on srv1
@@ -92,6 +92,22 @@ The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-serve
 
 ## Maintenance log
 
+### 2026-10-25: Pi moved from WiFi to Ethernet
+
+The real fix for the 2026-10-22 WiFi stall. The Pi now runs on its wired gigabit port only, and the WiFi radio is switched off.
+
+**Order of the change** (so SSH and the cluster stayed up, with WiFi as a fallback until the end):
+
+1. Added `eth0` with DHCP in its own netplan file (`/etc/netplan/60-eth0.yaml`, `route-metric: 100`, lower than WiFi's 600, so the cable became the default route), applied with `netplan try`, which rolls back after 120 seconds unless confirmed.
+2. Reserved the new address for the wired MAC in the router, and pointed the workstation SSH config at it.
+3. Restarted `k3s-agent`. k3s picks the node IP from the default-route interface at start, so the node, the kubelet and Flannel all moved to the wired address. The host-network pods (node-exporter, the Traefik `svclb` pod) were deleted so their DaemonSets re-created them on the new address.
+4. Disabled `wifi-watchdog.timer` (with no WiFi it would fail every check and reboot the Pi), told cloud-init to stop managing the network (`/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`: `network: {config: disabled}`, otherwise the WiFi seed in `/boot/firmware/network-config` could come back), moved the WiFi netplan file to `/root` (it holds the WiFi password), and added `dtoverlay=disable-wifi` to `/boot/firmware/config.txt` so the `brcmfmac` driver never loads.
+5. Rebooted to prove it: back on the wired address in about a minute, no `wlan0`, node `Ready`, public apps returning 200.
+
+**What went wrong:** srv1's ufw allowed the kubelet (10250), Flannel VXLAN (8472/udp) and node-exporter (9100) only from the Pi's **old** address. The agent was restarted before the new rules were added, so for about two minutes the node showed `Ready` (the API server rule allows the whole LAN) while pod traffic between the nodes was blocked and the agent log showed `tls: bad certificate` from srv1. Adding the three rules for the new address fixed it.
+
+**Lesson:** per-IP firewall rules are part of a node's identity. Before changing a node's address, list every rule that names it (`sudo ufw status numbered | grep <old-ip>`) on the *other* nodes, and add the new rules first.
+
 ### 2026-10-23: App volumes switched to Retain
 
 **Why:** every app volume (Linkding's data, Audiobookshelf's config, metadata, audiobooks and podcasts) uses k3s's `local-path` class, whose reclaim policy is `Delete`: if a PersistentVolumeClaim is deleted, k3s deletes the folder on srv1 with it. Flux already can't prune these claims (`prune: disabled`), but a mistaken `kubectl delete pvc` or `kubectl delete namespace` would still wipe the data.
@@ -118,7 +134,7 @@ Linkding's volume went first and was checked, then the four Audiobookshelf volum
 2. pings the default gateway;
 3. on failure, recovers in steps: restart the WiFi supplicant at about 2 minutes, reload the `brcmfmac` driver at about 4 minutes, reboot at about 10 minutes (only if up for more than an hour, so a router outage can't cause a reboot loop).
 
-Everything it does is logged: `journalctl -t wifi-watchdog`. The real fix is Ethernet, which is on the roadmap.
+Everything it does is logged: `journalctl -t wifi-watchdog`. The real fix was Ethernet, done on 2026-10-25 (see above); the watchdog is now disabled.
 
 **Rename:** `ubuntusrvpi` became `srvpi01` (numbered, in case more Pis join as control planes later). Steps: drain the node, set the hostname in **both** `/etc/hostname` (`hostnamectl`) and the cloud-init seed on the boot partition (`/boot/firmware/user-data`, which otherwise rewrites `/etc/hosts` with the old name on every boot), add `preserve_hostname: true`, reboot. k3s registered the Pi as a new node `srvpi01`; the old node object and its `ubuntusrvpi.node-password.k3s` secret were deleted.
 
