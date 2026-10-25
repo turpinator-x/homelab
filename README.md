@@ -11,9 +11,9 @@ I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boe
 **A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. Every push and pull request is validated by GitHub Actions: each Flux path is built and checked against Kubernetes and Flux schemas with kubeconform. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. A live public status page built with Claude Code (AI-assisted), [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard), is at `dashboard.jarrodturpin.dev`: it reads cluster numbers from Prometheus, ships as a multi-arch image built by GitHub Actions, and is locked down with a NetworkPolicy and the restricted pod security settings. A private [Homepage](https://gethomepage.dev) start page on the LAN discovers apps from their Ingress annotations and shows live node usage through a read-only ServiceAccount. Next up: trusted LAN certificates with cert-manager.
 
 ```
-NAME          STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
-srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0-38-generic (amd64)   containerd://2.3.4-k3s1.36
-srvpi01   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
+NAME        STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
+minisrv01   Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0-38-generic (amd64)   containerd://2.3.4-k3s1.36
+pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone, [docs/dashboard.md](docs/dashboard.md) for the public dashboard, and [docs/homepage.md](docs/homepage.md) for the LAN start page.
@@ -48,8 +48,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](doc
 
 | Device | Hostname | Hardware | OS | Role |
 |--------|----------|----------|----|------|
-| Mini PC | srv1 | KAMRUI AM21: AMD Ryzen 7 8745HS (8 cores), 24 GB RAM, 1 TB NVMe, wired | Ubuntu Server 26.04 LTS | k3s server (control plane) |
-| Raspberry Pi 5 | srvpi01 | Raspberry Pi 5, 8 GB RAM | Ubuntu Server 24.04 LTS | k3s agent (worker) |
+| Mini PC | minisrv01 | KAMRUI AM21: AMD Ryzen 7 8745HS (8 cores), 24 GB RAM, 1 TB NVMe, wired | Ubuntu Server 26.04 LTS | k3s server (control plane) |
+| Raspberry Pi 5 | pisrv01 | Raspberry Pi 5, 8 GB RAM | Ubuntu Server 24.04 LTS | k3s agent (worker) |
 | Main laptop | Stealth | MSI Stealth 17 Studio (i9-13900H, hybrid NVIDIA GPU, 2x 990 PRO) | Omarchy (Arch Linux) | Primary workstation, cluster management, local Kubernetes via Rancher Desktop |
 | Travel laptop | odin | Lenovo ThinkPad T480 | Omarchy (Arch Linux) | Second workstation |
 

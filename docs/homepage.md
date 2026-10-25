@@ -42,7 +42,7 @@ The container runs as non-root and can't write to `/app/config`, so every file H
 
 ## Access
 
-`/etc/hosts` on each laptop maps the LAN names to srv1: `linkding.home.arpa grafana.home.arpa homepage.home.arpa`. Done on the Stealth; still to do on Odin. Proper LAN DNS (instead of hosts files) is on the roadmap.
+`/etc/hosts` on each laptop maps the LAN names to minisrv01: `linkding.home.arpa grafana.home.arpa homepage.home.arpa`. Done on the Stealth; still to do on Odin. Proper LAN DNS (instead of hosts files) is on the roadmap.
 
 ## Ideas for later
 

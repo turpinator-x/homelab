@@ -35,7 +35,7 @@ The existing `apps` Flux Kustomization picks the folder up automatically.
 | `ENV PORT=80` | `configMapGenerator` with `PORT=3005`, read with `envFrom` |
 | `ports: - 13378:80` | `containerPort: 3005` and a ClusterIP Service; port-forward or the tunnel replaces the host port |
 | `./audiobooks:/audiobooks`, `./podcasts`, `./metadata`, `./config` | one `volumeMount` and one PVC each |
-| "config needs to be on the same physical machine" | `nodeSelector: srv1`, local-path storage on srv1's NVMe |
+| "config needs to be on the same physical machine" | `nodeSelector: minisrv01` (was `srv1`), local-path storage on its NVMe |
 | `# user: 1000:1000` | pod `securityContext`: `runAsUser`, `runAsGroup`, `fsGroup` 1000, `runAsNonRoot` |
 | `restart: unless-stopped` | built into a Deployment; a liveness probe also restarts a hung app |
 | `/healthcheck` route in the server | readiness and liveness probes |

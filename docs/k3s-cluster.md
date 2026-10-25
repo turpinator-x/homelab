@@ -4,10 +4,12 @@ How the two-node cluster was built (October 2026), following the KubeCraft Kuber
 
 ## Nodes
 
+Both hosts were renamed on 2026-10-25 (see the maintenance log). The build steps below keep the names used at the time: `srv1` is now `minisrv01` and `srvpi01` is now `pisrv01`.
+
 | Node | Role | Arch | OS |
 |------|------|------|----|
-| srv1 | server (control plane) | amd64 | Ubuntu Server 26.04 LTS |
-| srvpi01 (was ubuntusrvpi) | agent (worker) | arm64 | Ubuntu Server 24.04 LTS |
+| minisrv01 (was srv1) | server (control plane) | amd64 | Ubuntu Server 26.04 LTS |
+| pisrv01 (was srvpi01, ubuntusrvpi) | agent (worker) | arm64 | Ubuntu Server 24.04 LTS |
 
 ## 1. Prepare the hosts
 
@@ -82,7 +84,7 @@ srv1          Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0
 srvpi01   Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-server) run on srv1, and a ServiceLB pod runs on each node, which confirms scheduling and networking work across both.
+The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-server) run on the server node (now minisrv01), and a ServiceLB pod runs on each node, which confirms scheduling and networking work across both.
 
 ## Lessons learned
 
@@ -91,6 +93,25 @@ The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-serve
 - With two network interfaces on the same subnet, k3s may pick the wrong node IP. One wired interface (or `--node-ip` and `--flannel-iface`) avoids that.
 
 ## Maintenance log
+
+### 2026-10-25: Hosts renamed to minisrv01 and pisrv01
+
+`srv1` became **minisrv01** and `srvpi01` became **pisrv01**: what the machine is, then its role, then a number. Each name now starts with a different letter, so `ssh m<Tab>` and `ssh p<Tab>` each complete to one machine. Done by Claude Code with a temporary passwordless sudo rule on both hosts, removed afterwards. (The server briefly went through an intermediate name, `srvmini01`, before the final choice, so the steps below ran twice for it.)
+
+**Why it wasn't just `hostnamectl`:** k3s names the Kubernetes node after the hostname, and every app volume is a `local-path` PersistentVolume pinned to a node by name. A volume's node affinity can't be edited, so renaming the server meant re-creating the volume objects:
+
+1. Backed up the volume folders, the k3s SQLite datastore and `/etc/hosts` on the server; saved the PV and PVC definitions.
+2. Suspended the Flux `apps` Kustomization and scaled Linkding and Audiobookshelf to zero, then fingerprinted the data (an `md5sum` over every file).
+3. Deleted the five PVCs, then the five PVs. They were `Retain`, so the folders stayed on disk with the same fingerprint.
+4. Renamed the host (`hostnamectl`, the `127.0.1.1` line in `/etc/hosts`; cloud-init is disabled on the server) and restarted k3s. It registered as a new node; the old node object was deleted, and Kubernetes garbage-collected the pods still bound to it and rescheduled them.
+5. Re-created the five PVs with the same names and folder paths, the new node name in their node affinity, and a `claimRef` to each PVC, so each claim could only bind to its own volume.
+6. Changed Audiobookshelf's `nodeSelector` in Git and resumed Flux, which re-created the PVCs. They bound to the original volumes: Linkding's bookmark count and the Audiobookshelf database were unchanged.
+
+The Pi had no volumes, so it was the usual drain, rename (including `hostname:` in the cloud-init seed `/boot/firmware/user-data`, which otherwise puts the old name back on boot), agent restart, and deleting the old node object.
+
+**Gotcha: Flannel forwarding entries.** Each rename gave a node a new pod subnet. Twice, the *other* node added the route and neighbour entry for the new subnet but not the VXLAN forwarding entry (`bridge fdb show dev flannel.1`) that says which host to send to, so traffic between pods on different nodes failed in one direction (Homepage on the Pi returned 504 through Traefik on the server). Restarting k3s on the node with the missing entry rebuilt it. Check after any node change: each node's `bridge fdb show dev flannel.1` should list the other node's VTEP MAC with its IP, and a test pod on one node should resolve a name through CoreDNS on the other.
+
+**Also updated:** the SSH config and shell aliases in the dotfiles (old aliases removed so Tab completion is clean), the server shell profile's hostname checks, and these docs. Firewall rules and kubeconfigs use IP addresses, so they didn't change.
 
 ### 2026-10-25: Pi moved from WiFi to Ethernet
 

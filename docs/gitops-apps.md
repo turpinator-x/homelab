@@ -109,7 +109,7 @@ Containers don't run as root. Linkding's pod sets `runAsUser`, `runAsGroup` and 
 ```mermaid
 flowchart LR
     U["Browser"] -- "HTTPS" --> E["Cloudflare edge<br>linkding.jarrodturpin.dev"]
-    T1["cloudflared pod<br>srv1"] -- "outbound QUIC" --> E
+    T1["cloudflared pod<br>minisrv01"] -- "outbound QUIC" --> E
     T2["cloudflared pod<br>Raspberry Pi"] -- "outbound QUIC" --> E
     T1 --> S["Service linkding:9090"]
     T2 --> S

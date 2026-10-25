@@ -24,7 +24,7 @@ flowchart LR
 - **Fixed queries, cached.** The app runs seven PromQL queries plus one per app, in parallel, at most once every 15 seconds, and serves the cached result at `/api/stats`. Visitors can't send queries, and a traffic spike costs one round of queries per 15 seconds. If Prometheus is unreachable it keeps serving the last good numbers; with none cached it returns 503.
 - **Totals only.** No pod names, IPs or internal hostnames on the page.
 - **Separate app repo.** Source and image live in `homelab-dashboard`; this repo only has the manifests that pin a version. That's the usual GitOps split: app repo → image → config repo → Flux.
-- **Multi-arch image** (`linux/amd64`, `linux/arm64`), so the pod can run on srv1 or the Pi. No `nodeSelector` and no volume.
+- **Multi-arch image** (`linux/amd64`, `linux/arm64`), so the pod can run on minisrv01 or the Pi. No `nodeSelector` and no volume.
 
 ## Layout
 

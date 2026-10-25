@@ -9,8 +9,8 @@ flowchart LR
         O["odin<br>Omarchy"]
     end
     subgraph Cluster["k3s cluster (v1.36)"]
-        SRV["srv1<br>control plane<br>amd64, wired"]
-        PI["srvpi01<br>worker<br>Raspberry Pi 5, arm64"]
+        SRV["minisrv01<br>control plane<br>amd64, wired"]
+        PI["pisrv01<br>worker<br>Raspberry Pi 5, arm64"]
         PI -- "joins on :6443" --> SRV
         SRV <-- "Flannel VXLAN :8472/udp<br>kubelet :10250" --> PI
     end
@@ -26,8 +26,8 @@ flowchart LR
 
 - **Stealth (primary laptop):** daily workstation on Omarchy (Arch Linux). Manages the homelab cluster with `kubectl` and runs a separate local cluster in Rancher Desktop. The two are kept apart as separate `kubectl` contexts (`homelab` and `rancher-desktop`).
 - **odin (ThinkPad T480):** second Omarchy workstation, reached over SSH with key-only auth.
-- **srv1 (KAMRUI AM21 mini PC):** k3s server (control plane). AMD Ryzen 7 8745HS, 24 GB RAM, 1 TB NVMe, Ubuntu Server 26.04 LTS, wired network only.
-- **srvpi01 (Raspberry Pi 5, 8 GB):** k3s agent (worker), Ubuntu Server 24.04 LTS.
+- **minisrv01 (KAMRUI AM21 mini PC, was srv1):** k3s server (control plane). AMD Ryzen 7 8745HS, 24 GB RAM, 1 TB NVMe, Ubuntu Server 26.04 LTS, wired network only.
+- **pisrv01 (Raspberry Pi 5, 8 GB, was srvpi01):** k3s agent (worker), Ubuntu Server 24.04 LTS.
 
 ## Kubernetes
 
@@ -48,7 +48,7 @@ flowchart LR
 ## Sync Strategy
 
 - Homelab docs and cluster configuration: this public repo
-- Dotfiles: chezmoi, one private repo applied to every machine (desktop profile on the laptops, server profile on srv1 and the Pi)
+- Dotfiles: chezmoi, one private repo applied to every machine (desktop profile on the laptops, server profile on minisrv01 and the Pi)
 - System snapshots (fstab, firewall, sshd, VM definitions): GitHub, per host
 - Course work: public `lab` repo on GitHub
 - Obsidian vault: private Git repo, plus backups to Proton Drive
@@ -66,7 +66,7 @@ flowchart LR
 
 ## Privacy & Security
 
-- Full-disk encryption (LUKS) and UEFI Secure Boot on the laptops; LUKS on srv1
+- Full-disk encryption (LUKS) and UEFI Secure Boot on the laptops; LUKS on minisrv01
 - SSH key-only authentication with a hardened sshd config on every machine
 - Host firewalls on the servers allow SSH only from the workstations
 - Kubernetes Secrets are stored in Git only SOPS-encrypted; tokens, keys and kubeconfigs never are
