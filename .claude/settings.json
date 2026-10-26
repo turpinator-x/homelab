@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/validate.sh)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(kubectl kustomize *)",
+      "Bash(kubectl get *)",
+      "Bash(kubectl describe *)",
+      "Bash(flux get *)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr checks*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-yaml.sh",
+            "timeout": 60,
+            "statusMessage": "Validating manifests"
+          }
+        ]
+      }
+    ]
+  }
+}

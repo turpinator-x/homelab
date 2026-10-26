@@ -16,7 +16,7 @@ minisrv01   Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0-3
 pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone, [docs/dashboard.md](docs/dashboard.md) for the public dashboard, and [docs/homepage.md](docs/homepage.md) for the LAN start page.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone, [docs/dashboard.md](docs/dashboard.md) for the public dashboard, and [docs/homepage.md](docs/homepage.md) for the LAN start page. Design choices and their reasons are in [docs/decisions.md](docs/decisions.md), and current work and known issues in [docs/status.md](docs/status.md).
 
 ## Roadmap
 
