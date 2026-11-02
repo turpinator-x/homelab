@@ -39,6 +39,7 @@ spec:
               args:
                 - turpinator-x/homelab
                 - turpinator-x/homelab-dashboard
+                - turpinator-x/claims-app
               envFrom:
                 - configMapRef:
                     name: renovate-configmap
