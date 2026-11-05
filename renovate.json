@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "ignorePaths": ["clusters/staging/flux-system/**"],
+  "ignorePaths": ["clusters/staging/flux-system/**", ".github/workflows/secret-scan.yaml"],
   "kubernetes": {
     "managerFilePatterns": ["/\\.yaml$/"]
   },

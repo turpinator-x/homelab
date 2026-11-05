@@ -12,7 +12,7 @@ esac
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 [[ "$file" == "$repo"/* ]] || exit 0
 
-cd "$repo"
+cd "$repo" || exit 1
 if ! out=$(mise exec -- ./scripts/validate.sh 2>&1); then
   echo "scripts/validate.sh failed after editing $file:" >&2
   echo "$out" >&2

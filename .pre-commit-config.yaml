@@ -14,3 +14,9 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck -S warning
+        language: system
+        types_or: [bash, sh]
+        stages: [pre-commit]
