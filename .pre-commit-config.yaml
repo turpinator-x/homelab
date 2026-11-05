@@ -18,5 +18,6 @@ repos:
         name: shellcheck
         entry: shellcheck -S warning
         language: system
-        types_or: [bash, sh]
+        types: [shell]
+        exclude_types: [zsh]
         stages: [pre-commit]
