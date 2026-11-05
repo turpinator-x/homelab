@@ -13,7 +13,7 @@ Public GitOps repo for Jarrod's two-node k3s homelab (minisrv01 amd64 control pl
 ## Commands
 
 - Validate everything: `./scripts/validate.sh` (kubeconform, strict, same as CI). A Claude Code hook runs it after any YAML edit.
-- One-time per clone: `git config core.hooksPath .githooks` (blocks unencrypted Secrets + gitleaks).
+- One-time per clone: `pre-commit install` (blocks unencrypted Secrets + gitleaks, enforces Conventional Commits).
 - Encrypt a Secret: `sops -e -i <file>` (rules in `.sops.yaml`: only `data`/`stringData` are encrypted).
 
 ## Rules

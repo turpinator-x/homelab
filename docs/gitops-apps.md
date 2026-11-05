@@ -173,7 +173,7 @@ flowchart LR
 
 ### Guardrails
 
-A versioned pre-commit hook in [`.githooks/pre-commit`](../.githooks/pre-commit) blocks a commit when:
+A versioned check in [`.githooks/pre-commit`](../.githooks/pre-commit), run by [pre-commit](https://pre-commit.com), blocks a commit when:
 
 - a staged YAML file contains `kind: Secret` but no `sops:` block (a Secret that was never encrypted), or
 - [gitleaks](https://github.com/gitleaks/gitleaks) finds keys, tokens or credentials in the staged changes.
@@ -181,7 +181,7 @@ A versioned pre-commit hook in [`.githooks/pre-commit`](../.githooks/pre-commit)
 Git doesn't run hooks from a clone automatically, so each clone enables it once:
 
 ```bash
-git config core.hooksPath .githooks
+pre-commit install
 ```
 
 `.gitignore` is the second layer: it blocks age keys, Cloudflare credential files, kubeconfigs and the k3s node token from being staged at all.

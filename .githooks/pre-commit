@@ -2,7 +2,7 @@
 # Block commits that would put a plaintext secret into this public repo.
 #   1. Any staged YAML containing "kind: Secret" must be SOPS-encrypted.
 #   2. gitleaks scans the staged changes for keys, tokens and credentials.
-# Enable once per clone:  git config core.hooksPath .githooks
+# Run by pre-commit (see .pre-commit-config.yaml). Enable once per clone: pre-commit install
 set -euo pipefail
 
 fail=0
