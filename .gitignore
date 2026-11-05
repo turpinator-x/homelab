@@ -28,3 +28,18 @@ id_*
 .DS_Store
 *.swp
 *~
+
+# repo-baseline: secrets, never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.agekey
+*.kubeconfig
+kubeconfig
+*.tfstate
+*.tfstate.*
+dev-keys/

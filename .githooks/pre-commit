@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Block commits that would put a plaintext secret into this public repo.
+# Block commits that would put a plaintext secret into this repo.
 #   1. Any staged YAML containing "kind: Secret" must be SOPS-encrypted.
 #   2. gitleaks scans the staged changes for keys, tokens and credentials.
 # Run by pre-commit (see .pre-commit-config.yaml). Enable once per clone: pre-commit install
@@ -22,7 +22,8 @@ if command -v gitleaks >/dev/null 2>&1; then
 elif command -v mise >/dev/null 2>&1; then
   mise exec gitleaks@latest -- gitleaks git --pre-commit --staged --no-banner --redact || fail=1
 else
-  echo "pre-commit: gitleaks not found (install it with mise); skipping the leak scan." >&2
+  echo "pre-commit: gitleaks not found. Install it with mise; commit blocked." >&2
+  fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then
