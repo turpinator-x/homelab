@@ -1,14 +1,27 @@
-# Homelab Build Log
+# Homelab Platform
 
 [![validate](https://github.com/turpinator-x/homelab/actions/workflows/validate.yaml/badge.svg)](https://github.com/turpinator-x/homelab/actions/workflows/validate.yaml)
+[![secret-scan](https://github.com/turpinator-x/homelab/actions/workflows/secret-scan.yaml/badge.svg)](https://github.com/turpinator-x/homelab/actions/workflows/secret-scan.yaml)
 
-A self-hosted, multi-node Kubernetes platform run with GitOps, built while moving from enterprise IT into Platform and Cloud Engineering.
+A self-hosted, multi-node Kubernetes platform run entirely from Git: public apps, encrypted secrets, monitoring, automated updates and CI.
 
-I'm Jarrod Turpin, with 20+ years in enterprise IT at Microsoft, Amazon, and Boeing. This repo documents the homelab I'm building: the cluster, how it's deployed, what broke along the way, and what's next. Hands-on coursework (Bash, Docker, Kubernetes manifests, container networking labs) lives in my [lab repo](https://github.com/turpinator-x/lab).
+I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise IT at Microsoft, Amazon, and Boeing. This repo is the live configuration of the cluster, plus how it was built, what broke, and what's next.
 
-## Current Status
+**See it running:** [dashboard.jarrodturpin.dev](https://dashboard.jarrodturpin.dev) shows live numbers from this cluster.
 
-**A two-node k3s cluster is running** on a mini PC and a Raspberry Pi 5, **managed with GitOps by FluxCD** from this repository. Flux watches [`clusters/staging`](clusters/staging) and applies whatever is committed there. The first app, [Linkding](https://github.com/sissbruecker/linkding) (a bookmark manager), is deployed from [`apps/`](apps) with Kustomize: persistent storage, a non-root security context, and public HTTPS access at `linkding.jarrodturpin.dev` through a Cloudflare Tunnel, with no ports open on my router. Secrets are committed encrypted with SOPS and age and decrypted by Flux, with a pre-commit hook that blocks any unencrypted Secret. Monitoring (Prometheus, Grafana, Alertmanager) is installed by Flux as a Helm chart from an OCI registry, and Grafana and Linkding have LAN hostnames through Traefik Ingress, Grafana with TLS. Renovate runs in the cluster as a GitHub App and opens pull requests when images or charts have new versions; merging one is the deployment. Every push and pull request is validated by GitHub Actions: each Flux path is built and checked against Kubernetes and Flux schemas with kubeconform. The course capstone, [Audiobookshelf](https://github.com/advplyr/audiobookshelf), is public at `audiobooks.jarrodturpin.dev`, translated from its Docker Compose file into Kubernetes manifests. A live public status page built with Claude Code (AI-assisted), [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard), is at `dashboard.jarrodturpin.dev`: it reads cluster numbers from Prometheus, ships as a multi-arch image built by GitHub Actions, and is locked down with a NetworkPolicy and the restricted pod security settings. A private [Homepage](https://gethomepage.dev) start page on the LAN discovers apps from their Ingress annotations and shows live node usage through a read-only ServiceAccount. Next up: trusted LAN certificates with cert-manager.
+## At a Glance
+
+| Area | What's in place |
+|---|---|
+| Cluster | Two-node k3s (v1.36): a mini PC control plane and a Raspberry Pi 5 worker, mixed amd64 and arm64 |
+| GitOps | FluxCD reconciles [`clusters/staging`](clusters/staging) over a read-only deploy key; Kustomize base and overlays in [`apps/`](apps) |
+| Public apps | [Linkding](https://github.com/sissbruecker/linkding), [Audiobookshelf](https://github.com/advplyr/audiobookshelf) and the dashboard, through Cloudflare Tunnels with no inbound ports open |
+| LAN apps | [Homepage](https://gethomepage.dev) start page with Ingress auto-discovery and read-only RBAC; Traefik Ingress for LAN hostnames |
+| Secrets | SOPS and age, decrypted by Flux; commits with an unencrypted Secret or a leaked credential are blocked |
+| Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) as a Flux HelmRelease from an OCI registry |
+| Updates | Self-hosted Renovate on a GitHub App; low-risk updates merge once CI passes and majors wait for review, so merging is the deployment |
+| CI | GitHub Actions: kubeconform on every Flux path (strict schemas, SHA-pinned actions) and a full-history gitleaks scan |
+| Workload security | Non-root containers, a NetworkPolicy and restricted pod security on the public dashboard, `main` protected from force pushes and deletion |
 
 ```
 NAME        STATUS   ROLES           VERSION        OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
@@ -16,32 +29,25 @@ minisrv01   Ready    control-plane   v1.36.5+k3s1   Ubuntu 26.04.1 LTS   7.0.0-3
 pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1065-raspi (arm64)   containerd://2.3.4-k3s1.36
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout, [docs/k3s-cluster.md](docs/k3s-cluster.md) for how the cluster was built, [docs/flux-bootstrap.md](docs/flux-bootstrap.md) for how Flux was installed, and [docs/gitops-apps.md](docs/gitops-apps.md) for how apps are deployed and kept up to date, [docs/monitoring.md](docs/monitoring.md) for monitoring, [docs/audiobookshelf.md](docs/audiobookshelf.md) for the capstone, [docs/dashboard.md](docs/dashboard.md) for the public dashboard, and [docs/homepage.md](docs/homepage.md) for the LAN start page. Design choices and their reasons are in [docs/decisions.md](docs/decisions.md), and current work and known issues in [docs/status.md](docs/status.md).
+## Documentation
 
-## Roadmap
+- [ARCHITECTURE.md](ARCHITECTURE.md): the layout
+- [docs/k3s-cluster.md](docs/k3s-cluster.md): how the cluster was built
+- [docs/flux-bootstrap.md](docs/flux-bootstrap.md): how Flux was installed
+- [docs/gitops-apps.md](docs/gitops-apps.md): how apps are deployed and kept up to date
+- [docs/monitoring.md](docs/monitoring.md): monitoring
+- [docs/audiobookshelf.md](docs/audiobookshelf.md): translating a Docker Compose app into Kubernetes manifests
+- [docs/dashboard.md](docs/dashboard.md): the public dashboard
+- [docs/homepage.md](docs/homepage.md): the LAN start page
+- [docs/decisions.md](docs/decisions.md): design choices and their reasons
+- [docs/status.md](docs/status.md): current work and known issues
 
-- [x] Arch Linux built from scratch (LUKS + LVM, systemd, ufw)
-- [x] Kubernetes Fundamentals (Deployments, Services, Ingress, PVCs, Helm, Prometheus/Grafana)
-- [x] Networking fundamentals, container networking, and BGP (containerlab)
-- [x] Dev Containers, Neovim (LazyVim), and config management with chezmoi and mise
-- [x] Local LLM services on Docker with Python: a RAG-based PDF question-answering app (LocalAI, embeddings, Qdrant, FastAPI, web UI)
-- [x] Multi-node k3s cluster (mixed amd64 and arm64)
-- [x] GitOps with FluxCD: Flux bootstrapped and managing itself from this repo
-- [x] First app deployed through Flux with Kustomize base/overlay layout (Linkding)
-- [x] First Helm chart through Flux (HelmRelease from an OCIRepository)
-- [ ] More infrastructure and apps through Flux
-- [x] Persistent storage and non-root containers
-- [x] Secrets in Git, encrypted with SOPS and age, with a pre-commit guardrail
-- [x] Monitoring with kube-prometheus-stack, installed by a Flux HelmRelease
-- [x] Traefik Ingress for LAN hostnames, Grafana with a SOPS-encrypted TLS certificate
-- [ ] LAN DNS and trusted certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare) and a wildcard `*.lab` record, so every device on the network reaches the apps by name with no hosts files or certificate warnings
-- [x] Apps exposed securely through Cloudflare Tunnel on `jarrodturpin.dev` (no inbound ports)
-- [x] Automated dependency updates with Renovate (self-hosted CronJob, PRs reviewed before Flux deploys)
-- [x] CI: every push and PR validated with GitHub Actions and kubeconform (strict schemas, SHA-pinned actions, same script runs locally)
-- [x] Capstone: Audiobookshelf translated from Docker Compose to Kubernetes and deployed through GitOps (persistent volumes, non-root, public through its own Cloudflare Tunnel)
-- [x] Public homelab dashboard (AI-assisted): a Python (FastAPI) app written by Claude Code, reading Prometheus, multi-arch image built and published by GitHub Actions to GHCR, deployed by Flux with a NetworkPolicy and restricted pod security
-- [x] Private LAN start page (Homepage): Ingress-annotation auto-discovery, read-only RBAC, config from a configMapGenerator
-- [ ] Run the PDF Q&A AI stack on the cluster as a platform service (Helm chart, metrics, model comparison)
+## What's Next
+
+- [ ] Trusted LAN certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare)
+- [ ] Alertmanager receivers and an automated node upgrade process
+- [ ] The PDF Q&A AI stack as a cluster platform service (Helm chart, metrics, model comparison)
+- [ ] A Talos test cluster, then a three-control-plane rebuild
 - [ ] CKA certification
 
 ## Current Setup
@@ -57,8 +63,14 @@ All four machines share a TESmart 4-port HDMI KVM switch and a Dell S2725QS moni
 
 ## What's Built
 
+### Kubernetes on Azure (AKS)
+A production-style AKS platform built in the KubeCraft Kubernetes in the Cloud course (private repo, `blockone-workflows`). Terraform provisions the infrastructure, with one reusable module that onboards a customer end to end across staging and production clusters. On top of that: Flux GitOps, Azure Key Vault secret sync, Traefik and cert-manager, CloudNativePG databases with backups and point-in-time restores to Azure Blob Storage, Entra ID cluster access, separate node pools with upgrade and maintenance windows, Pod Security Standards with network policies, and kube-prometheus-stack with Grafana alerts.
+
+### Engineering Standards
+All my active repositories follow one baseline, applied and checked by a small `repo-baseline` tool (AI-assisted): Conventional Commits enforced by Commitizen, a pre-commit secret check, `shellcheck` on every shell script, gitleaks over the full history in CI, and Renovate for dependency updates. Public repos add GitHub secret scanning, push protection and a protected `main`.
+
 ### Kubernetes Homelab (k3s)
-A two-node k3s cluster: the mini PC as the control plane and the Raspberry Pi 5 as a worker, so workloads run across both amd64 and arm64. Host firewalls (ufw) only open the ports the nodes need between each other, and the Kubernetes API is reachable from the LAN only. The workstation keeps separate `kubectl` contexts for the homelab and the local Rancher Desktop cluster. Following the KubeCraft Kubernetes Homelab course, the cluster is managed with GitOps: FluxCD pulls this repo over a read-only SSH deploy key and reconciles the cluster to match it, so changes go in through Git commits rather than `kubectl apply`.
+A two-node k3s cluster: the mini PC as the control plane and the Raspberry Pi 5 as a worker, so workloads run across both amd64 and arm64. Host firewalls (ufw) only open the ports the nodes need between each other, and the Kubernetes API is reachable from the LAN only. The workstation keeps separate `kubectl` contexts for the homelab and the local Rancher Desktop cluster. The cluster is managed with GitOps: FluxCD pulls this repo over a read-only SSH deploy key and reconciles the cluster to match it, so changes go in through Git commits rather than `kubectl apply`.
 
 ### Local AI: PDF Question Answering (RAG)
 A local, CPU-only document Q&A service from the KubeCraft Python, Docker & AI course: Phi-3.5-mini served by LocalAI, a sentence-transformers embeddings API, Qdrant vector search, a FastAPI backend that streams answers, and a web UI with source citations. It runs entirely on my laptop with Docker Compose. The code is in a private repo because it builds on paid course material.
@@ -119,10 +131,12 @@ Platform engineering and other:
 
 - [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard): source, tests, Dockerfile and CI for the public dashboard
 - [lab](https://github.com/turpinator-x/lab): course exercises (Bash, Docker, Kubernetes YAML, containerlab networking write-ups)
+- `blockone-workflows` (private): Terraform and GitOps for the AKS platform
 - `dotfiles` (private): chezmoi-managed configuration for all four machines
 - `python-docker-ai` (private): the local AI PDF Q&A stack
 - `15m-workstation` (private): deploy and backup automation
-- Obsidian knowledge base (private): 240+ technical notes from the KubeCraft courses
+- `claims-app` (private, AI-assisted): [Crypto Lighthouse](https://cryptolighthouse.io), a live non-custodial crypto site built with Claude Code
+- Obsidian knowledge base (private): 250+ technical notes
 
 ## Connect
 
