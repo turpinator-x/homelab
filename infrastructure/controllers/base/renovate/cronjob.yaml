@@ -48,6 +48,7 @@ spec:
                 - turpinator-x/dotfiles
                 - turpinator-x/python-docker-ai
                 - turpinator-x/devops-study-app
+                - turpinator-x/devops-study-app-gitops
                 - turpinator-x/chain-explorer
               envFrom:
                 - configMapRef:
