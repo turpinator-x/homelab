@@ -61,7 +61,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 | Main laptop | Stealth | MSI Stealth 17 Studio (i9-13900H, hybrid NVIDIA GPU, 2x 990 PRO) | Omarchy (Arch Linux) | Primary workstation, cluster management, local Kubernetes via Rancher Desktop |
 | Travel laptop | odin | Lenovo ThinkPad T480 | Omarchy (Arch Linux) | Second workstation |
 
-A future expansion plan (a 10-inch mini rack of thin clients plus a NAS) is in the works.
+All four machines share a TESmart 4-port HDMI KVM switch and a Dell S2725QS monitor. A future expansion plan (a 10-inch mini rack of thin clients plus a NAS) is in the works.
 
 ## What's Built
 
