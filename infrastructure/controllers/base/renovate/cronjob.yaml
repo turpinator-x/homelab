@@ -50,6 +50,7 @@ spec:
                 - turpinator-x/devops-study-app
                 - turpinator-x/devops-study-app-gitops
                 - turpinator-x/chain-explorer
+                - turpinator-x/kcca-devops-mentor
               envFrom:
                 - configMapRef:
                     name: renovate-configmap
