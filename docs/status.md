@@ -2,30 +2,35 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-10-26_
+_Last updated: 2026-11-06_
 
 ## Running
 
 | Component | Path | Notes |
 |---|---|---|
+| k3s v1.36.5 | minisrv01, pisrv01 | both nodes Ready |
 | Flux v2.9 | `clusters/staging` | read-only SSH deploy key, 1 min interval, prune on |
 | Linkding | `apps/*/linkding` | public via Cloudflare Tunnel; `linkding-tasks` sidecar runs background jobs |
 | Audiobookshelf | `apps/*/audiobookshelf` | public, own tunnel, pinned to minisrv01 (local-path volumes) |
 | Dashboard | `apps/*/dashboard` | image from `homelab-dashboard` repo (GHCR), NetworkPolicy, no SA token |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
-| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, GitHub App token minted per run |
+| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 13 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
 | CI | `.github/workflows/validate.yaml` | kubeconform on push/PR; not a required check |
+| Secret scan | `.github/workflows/secret-scan.yaml` | gitleaks over the full history; not a required check |
+| Repo baseline | `.pre-commit-config.yaml` | since 2026-11-04: Commitizen, secret checks and shellcheck through pre-commit |
+| Ruleset | `protect-main` | active on GitHub |
 
 ## Next
 
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
 3. PDF Q&A AI stack as a cluster platform service.
-4. Later: test cluster (Talos) and 3-control-plane rebuild — see `decisions.md`.
+4. Later: test cluster (Talos) and 3-control-plane rebuild. See `decisions.md`.
 
 ## Known issues
 
+- One Renovate Job from 2026-11-04 is still listed as Failed, with an error on `chain-explorer`. It stays in the Job history. The latest run on 2026-11-06 completed and reached all 13 repos with no errors.
 - Linkding web container logs a supervisord "can't drop privilege" error once at start (expected; background tasks run in the sidecar).
 
 ## Don't repeat
