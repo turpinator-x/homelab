@@ -213,7 +213,7 @@ flowchart LR
 
 ## Automated updates: Renovate
 
-[Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`infrastructure/controllers/base/renovate`, GitHub App key in `infrastructure/controllers/staging/renovate`, applied by the `infra-controllers` Kustomization). Every hour it reads each of the 13 repos in the CronJob's `args`. In this repo it checks every container image and Helm chart for newer versions and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
+[Renovate](https://docs.renovatebot.com/) runs in the cluster as a CronJob (`infrastructure/controllers/base/renovate`, GitHub App key in `infrastructure/controllers/staging/renovate`, applied by the `infra-controllers` Kustomization). Every hour it reads each of the 14 repos in the CronJob's `args`. In this repo it checks every container image and Helm chart for newer versions and opens a pull request per update, plus a Dependency Dashboard issue listing what's pending.
 
 ```mermaid
 flowchart LR
@@ -234,7 +234,7 @@ flowchart LR
 - **`renovate.json`:** `config:recommended`, plus `managerFilePatterns` for two managers: `kubernetes` (container images in manifests) and `flux` (the chart version in the `OCIRepository`). Without the Flux manager, Helm charts are never updated.
 - **Flux's own files are excluded** (`ignorePaths: clusters/staging/flux-system/**`). Renovate would bump Flux's controller images one at a time; Flux is upgraded as a set with its CLI.
 - **The image is pinned** (`renovate/renovate:<version>`), so the 440 MB image is cached on the node instead of pulled every hour, and Renovate opens PRs to update itself.
-- **Renovate signs in as a GitHub App, with 1-hour tokens.** A private GitHub App (`turpinator-x-renovate`) is installed on the 13 repos in the CronJob's `args`, with Contents, Pull requests, Issues, Commit statuses, Checks and Workflows read/write and Dependabot alerts read. Workflows lets it update the pinned actions in `.github/workflows/`; GitHub blocks any app from changing those files without it. Its private key is the one long-lived secret (SOPS-encrypted in Git). Each run:
+- **Renovate signs in as a GitHub App, with 1-hour tokens.** A private GitHub App (`turpinator-x-renovate`) is installed on the 14 repos in the CronJob's `args`, with Contents, Pull requests, Issues, Commit statuses, Checks and Workflows read/write and Dependabot alerts read. Workflows lets it update the pinned actions in `.github/workflows/`; GitHub blocks any app from changing those files without it. Its private key is the one long-lived secret (SOPS-encrypted in Git). Each run:
   1. The init container (same Renovate image, `node mint-token.mjs` from a generated ConfigMap) signs a 9-minute JWT with the key.
   2. GitHub exchanges it for an installation token that expires in one hour.
   3. The token is written to a memory-only `emptyDir` as Renovate's config file (`RENOVATE_CONFIG_FILE`), and the Renovate container starts.

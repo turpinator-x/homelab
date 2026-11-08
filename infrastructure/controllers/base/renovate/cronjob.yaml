@@ -50,6 +50,7 @@ spec:
                 - turpinator-x/chain-explorer
                 - turpinator-x/blockone-devops-ai-journey
                 - turpinator-x/turpinator-x
+                - turpinator-x/domain-sites
               envFrom:
                 - configMapRef:
                     name: renovate-configmap
