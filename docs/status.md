@@ -26,7 +26,7 @@ _Last updated: 2026-11-07_
 
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
-3. Self-hosted model platform (`docs/llm.md`): phase 2, the gateway. agentgateway chosen (`docs/llm-gateway-decision.md`); laptop test next.
+3. Self-hosted model platform (`docs/llm.md`): phase 2, the gateway, is built and tested on my laptop. It needs the `gateway-keys` Secret and review before it deploys.
 4. Later: test cluster (Talos) and 3-control-plane rebuild. See `decisions.md`.
 
 ## Known issues

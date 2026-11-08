@@ -15,6 +15,20 @@ spec:
             severity: critical
           annotations:
             summary: The model server has not answered a metrics scrape for 5 minutes
+        - alert: ModelServerBackupDown
+          expr: absent(up{namespace="llm", job="model-server-backup"} == 1)
+          for: 5m
+          labels:
+            severity: warning # the primary still answers, but there's no failover
+          annotations:
+            summary: The backup model server has not answered a metrics scrape for 5 minutes
+        - alert: GatewayDown
+          expr: absent(up{namespace="llm", job="gateway"} == 1)
+          for: 5m
+          labels:
+            severity: critical # nothing can reach either model
+          annotations:
+            summary: The model gateway has not answered a metrics scrape for 5 minutes
         - alert: ModelServerQueueing
           # Requests waiting for a free slot: users are waiting longer than they should
           expr: max(llamacpp:requests_deferred{namespace="llm"}) > 0

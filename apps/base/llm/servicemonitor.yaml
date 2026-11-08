@@ -6,9 +6,26 @@ metadata:
     release: kube-prometheus-stack # the label this Prometheus looks for
 spec:
   selector:
-    matchLabels:
-      app: model-server
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["model-server", "model-server-backup"]
   endpoints:
     - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gateway
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: gateway
+  endpoints:
+    - port: metrics
       path: /metrics
       interval: 15s

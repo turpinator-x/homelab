@@ -5,7 +5,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: model-server
+      tier: model # both model servers
   policyTypes:
     - Ingress
     - Egress
@@ -20,9 +20,11 @@ spec:
               app.kubernetes.io/name: prometheus
       ports:
         - port: http
-    # Pods in this namespace, such as the gateway that comes next. Nothing else in the cluster can call the model
+    # Only the gateway. Everything else, including other pods in this namespace, goes through it
     - from:
-        - podSelector: {}
+        - podSelector:
+            matchLabels:
+              app: gateway
       ports:
         - port: http
   egress:
@@ -50,4 +52,54 @@ spec:
               - 169.254.0.0/16
       ports:
         - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Prometheus, to scrape the gateway's metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: metrics
+    # Clients: pods in this namespace for now (the load test in phase 3). Each needs an API key
+    - from:
+        - podSelector: {}
+      ports:
+        - port: http
+  egress:
+    # DNS, to find the model Services
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The two model servers, and nothing else. No internet
+    - to:
+        - podSelector:
+            matchLabels:
+              tier: model
+      ports:
+        - port: 8080
           protocol: TCP

@@ -15,6 +15,7 @@ spec:
     metadata:
       labels:
         app: model-server
+        tier: model # shared by both model servers, for the NetworkPolicy
     spec:
       automountServiceAccountToken: false
       securityContext:

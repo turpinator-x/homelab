@@ -1,0 +1,125 @@
+# The failover model: a copy of model-server on the other node. Same image, same pinned model
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-server-backup
+  labels:
+    app: model-server-backup
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one ReadWriteOnce volume, so the old pod must let go before the new one starts
+  selector:
+    matchLabels:
+      app: model-server-backup
+  template:
+    metadata:
+      labels:
+        app: model-server-backup
+        tier: model # shared by both model servers, for the NetworkPolicy
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001 # lets the download step write to the volume
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        nodeAffinity:
+          # The backup runs on the other node, so one node going down leaves one model up
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: ["arm64"]
+      initContainers:
+        # Downloads the model once, and stops the pod if the file isn't the pinned one
+        - name: fetch-model
+          image: curlimages/curl:8.17.0@sha256:935d9100e9ba842cdb060de42472c7ca90cfe9a7c96e4dacb55e79e560b3ff40
+          command: ["sh", "/scripts/fetch-model.sh"]
+          envFrom:
+            - configMapRef:
+                name: model-settings
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server-b12182@sha256:6d581c788abba2dfa23ff78dba37ea0abfc7d838c49bcc98f4be2103df9772b3
+          args:
+            - --model
+            - /models/$(MODEL_FILE)
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --metrics # Prometheus metrics on /metrics
+            - --ctx-size
+            - "4096"
+            - --threads
+            - "3" # the Pi has 4 cores; leave one for everything else
+          envFrom:
+            - configMapRef:
+                name: model-settings
+          ports:
+            - name: http
+              containerPort: 8080
+          # /health answers 503 while the model loads, and 200 once it's ready
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: models-backup
+        - name: scripts
+          configMap:
+            name: fetch-model-script
