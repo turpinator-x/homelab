@@ -1,6 +1,6 @@
 # Decision: which gateway goes in front of the model (P1, phase 2)
 
-**Date:** 2026-11-08. **Status:** accepted, not built yet. **AI-assisted:** Claude Code did the research and drafted this. I set the requirements. The choice is waiting for my review in PR #23.
+**Date:** 2026-11-08. **Status:** proposed, not built yet. **AI-assisted:** Claude Code did the research and drafted this. I set the requirements. The choice is waiting for my review in PR #23.
 
 ## The problem
 
