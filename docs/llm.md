@@ -31,8 +31,8 @@ flowchart LR
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Model server: pinned model, download check, probes, limits, NetworkPolicy, metrics, dashboard, basic alerts | Built, waiting for review |
-| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Next. The gateway choice gets a decision record first |
+| 1 | Model server: pinned model, download check, probes, limits, NetworkPolicy, metrics, dashboard, basic alerts | Deployed 2026-11-07 (#22), checked on the cluster |
+| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Next. Gateway chosen: agentgateway ([decision record](llm-gateway-decision.md)) |
 | 3 | SLO on time to first token, with a load test and an error-budget alert | After the gateway, which measures it per request |
 | 4 | Failure drill and postmortem, demo, cost note | Last |
 
@@ -64,7 +64,22 @@ On my laptop, in Docker, with the cluster's security settings (2026-11-07):
 
 On the cluster, before merging: `./scripts/validate.sh` passes, and a server-side dry run (`kubectl apply --dry-run=server`) accepted every object.
 
-**Not tested yet:** the pod on the real cluster, the NetworkPolicy blocking traffic, Prometheus scraping it, the dashboard and the alerts firing. Those get checked after Flux deploys it. Results go here.
+On the cluster, after Flux deployed it (2026-11-07). Each block was checked against a control that's allowed, so a refusal means the policy, not a missing service:
+
+| Test | Result |
+|---|---|
+| Download step on first start | "model downloaded and checksum matches". The pod was Ready about 30 seconds after Flux applied it, on minisrv01 |
+| Chat request, through a port-forward | A correct answer. 71 ms to read the prompt, 113 tokens a second |
+| Prometheus scrape | Target up, `llamacpp:` metrics arriving |
+| Alert rules | Both loaded, healthy and inactive. The `ModelServerDown` expression returns nothing while the server is up |
+| Grafana dashboard | Loaded by the sidecar. Not yet viewed in a browser |
+| Ingress from another namespace (homepage) | Refused. Control: the same request from inside `llm` returns `{"status":"ok"}` |
+| Egress to Hugging Face over HTTPS | Allowed (HTTP 200) |
+| Egress to the Kubernetes API Service | Blocked |
+| Egress to the control plane node's API port | Blocked. Control: the homepage pod reaches the same port and gets HTTP 401 |
+| Egress over plain HTTP to the internet | Blocked |
+
+**Not tested yet:** an alert actually firing and reaching Alertmanager. That's the failure drill in phase 4, where the server is broken on purpose.
 
 ## Using it
 
