@@ -12,3 +12,18 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-server-backup
+  labels:
+    app: model-server-backup
+spec:
+  type: ClusterIP
+  selector:
+    app: model-server-backup
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

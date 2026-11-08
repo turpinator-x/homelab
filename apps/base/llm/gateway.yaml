@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  replicas: 1 # rate-limit counters are per replica, so one keeps the limits exact
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agentgateway
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+          args: ["-f", "/config/config.yaml"]
+          envFrom:
+            - secretRef:
+                name: gateway-keys
+          ports:
+            - name: http
+              containerPort: 4000
+            - name: metrics
+              containerPort: 15020
+            - name: ready
+              containerPort: 15021
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: ready
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: ready
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+    - name: metrics
+      port: 15020
+      targetPort: metrics

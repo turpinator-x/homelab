@@ -4,12 +4,17 @@ resources:
   - namespace.yaml
   - storage.yaml
   - deployment.yaml
+  - deployment-backup.yaml
+  - gateway.yaml
   - service.yaml
   - networkpolicy.yaml
   - servicemonitor.yaml
   - alerts.yaml
   - dashboard.yaml
 configMapGenerator:
+  - name: gateway-config
+    files:
+      - config.yaml=gateway-config.yaml
   - name: fetch-model-script
     files:
       - fetch-model.sh

@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# agentgateway config for the model platform. Why agentgateway: docs/llm-gateway-decision.md
+# Tested on a laptop against the same llama.cpp image before it came here (docs/llm.md, phase 2)
+config:
+  readinessAddr: 0.0.0.0:15021 # /healthz/ready, for the kubelet
+  statsAddr: 0.0.0.0:15020 # Prometheus metrics
+llm:
+  port: 4000
+  policies:
+    # Every request needs a key. The keys come from the gateway-keys Secret as environment
+    # variables. If one is missing, the gateway refuses to start rather than run without it
+    apiKey:
+      mode: strict
+      keys:
+        - key: $KEY_JARROD
+          metadata:
+            user: jarrod
+        - key: $KEY_LOADTEST
+          metadata:
+            user: loadtest
+    # Per key: 60 requests a minute, and 50,000 tokens an hour (prompt plus answer).
+    # Counters live in the gateway's memory, so they reset when it restarts. Fine for one replica
+    localRateLimit:
+      - type: requests
+        maxTokens: 60
+        tokensPerFill: 60
+        fillInterval: 60s
+        key: apiKey.user
+      - type: tokens
+        maxTokens: 50000
+        tokensPerFill: 50000
+        fillInterval: 1h
+        key: apiKey.user
+  models:
+    - name: primary
+      visibility: internal
+      provider:
+        custom:
+          formats:
+            - type: completions
+      params:
+        baseUrl: http://model-server:8080/v1
+        model: qwen2.5-0.5b-instruct
+      health:
+        eviction:
+          consecutiveFailures: 1
+          duration: 30s
+    - name: backup
+      visibility: internal
+      provider:
+        custom:
+          formats:
+            - type: completions
+      params:
+        baseUrl: http://model-server-backup:8080/v1
+        model: qwen2.5-0.5b-instruct
+      health:
+        eviction:
+          consecutiveFailures: 1
+          duration: 30s
+  # Clients ask for "chat". The primary answers; if it fails, it's taken out for 30 seconds
+  # and the backup answers. The request that hits the failure still fails (no retries in this
+  # config mode in v1.7.0), so clients should retry once on a 503
+  virtualModels:
+    - name: chat
+      routing:
+        failover:
+          targets:
+            - model: primary
+              priority: 0
+            - model: backup
+              priority: 1

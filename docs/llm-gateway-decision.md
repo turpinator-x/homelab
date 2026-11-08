@@ -76,6 +76,12 @@ What it teaches, and what this cluster already does: pin images by digest so a m
 6. **Move the model download into its own Job** (from phase 1's notes), so the model server itself has no internet access.
 7. **Build the drills before calling it done.** A missing key gets a 401. Going over the limit gets a 429. The first model going down sends traffic to the second. The test checks each result, not just that the command ran.
 
+## What the laptop test showed (2026-11-08)
+
+agentgateway did what its docs say, except one thing. Keys, per-key request and token limits, failover and the metrics all worked. Retries aren't available in the simple config mode, so the request that finds the primary down fails once with 503 before failover starts. The details are in [llm.md](llm.md). It doesn't change the decision. It's written down, and clients retry once.
+
+Step 2 above also changed. The keys can come from environment variables, so only the keys go in a SOPS Secret, and the config stays a readable ConfigMap.
+
 ## What would change this
 
 - agentgateway turning out not to work as documented on this cluster (the laptop test comes first for this reason).
