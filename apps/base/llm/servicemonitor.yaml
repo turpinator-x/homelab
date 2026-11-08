@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: model-server
+  labels:
+    release: kube-prometheus-stack # the label this Prometheus looks for
+spec:
+  selector:
+    matchLabels:
+      app: model-server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

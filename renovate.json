@@ -42,6 +42,13 @@
       "schedule": ["at any time"]
     },
     {
+      "description": "llama.cpp ships several builds a day, tagged server-b<number>, and each one is new. Hold them for the weekly review instead of a PR a day",
+      "matchDepNames": ["ghcr.io/ggml-org/llama.cpp"],
+      "versioning": "regex:^server-b(?<major>\\d+)$",
+      "automerge": false,
+      "schedule": ["before 6am on monday"]
+    },
+    {
       "description": "Majors always wait for the weekly review",
       "matchUpdateTypes": ["major"],
       "automerge": false

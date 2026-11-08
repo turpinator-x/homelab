@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: model-server
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: model-server
+      rules:
+        - alert: ModelServerDown
+          expr: absent(up{namespace="llm", job="model-server"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: The model server has not answered a metrics scrape for 5 minutes
+        - alert: ModelServerQueueing
+          # Requests waiting for a free slot: users are waiting longer than they should
+          expr: max(llamacpp:requests_deferred{namespace="llm"}) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Requests have been queueing at the model server for 10 minutes

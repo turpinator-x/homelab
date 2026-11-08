@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+  - servicemonitor.yaml
+  - alerts.yaml
+  - dashboard.yaml
+configMapGenerator:
+  - name: fetch-model-script
+    files:
+      - fetch-model.sh
+  # The model, pinned like an image: an exact commit and the file's SHA-256
+  - name: model-settings
+    literals:
+      - MODEL_FILE=qwen2.5-0.5b-instruct-q4_k_m.gguf
+      - MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      - MODEL_SHA256=74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
