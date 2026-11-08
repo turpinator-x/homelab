@@ -14,7 +14,7 @@ _Last updated: 2026-11-06_
 | Audiobookshelf | `apps/*/audiobookshelf` | public, own tunnel, pinned to minisrv01 (local-path volumes) |
 | Dashboard | `apps/*/dashboard` | image from `homelab-dashboard` repo (GHCR), NetworkPolicy, no SA token |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
-| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 15 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
+| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 13 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
 | CI | `.github/workflows/validate.yaml` | kubeconform on push/PR; not a required check |
 | Secret scan | `.github/workflows/secret-scan.yaml` | gitleaks over the full history; not a required check |
@@ -30,7 +30,7 @@ _Last updated: 2026-11-06_
 
 ## Known issues
 
-- One Renovate Job from 2026-11-04 is still listed as Failed, with an error on `chain-explorer`. It stays in the Job history. The latest run on 2026-11-06 completed and reached all 15 repos with no errors.
+- One Renovate Job from 2026-11-04 is still listed as Failed, with an error on `chain-explorer`. It stays in the Job history. The latest run on 2026-11-06 completed and reached all 13 repos with no errors.
 - Linkding web container logs a supervisord "can't drop privilege" error once at start (expected; background tasks run in the sidecar).
 
 ## Don't repeat

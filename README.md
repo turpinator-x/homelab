@@ -19,7 +19,7 @@ I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise I
 | LAN apps | [Homepage](https://gethomepage.dev) start page with Ingress auto-discovery and read-only RBAC; Traefik Ingress for LAN hostnames |
 | Secrets | SOPS and age, decrypted by Flux; a pre-commit hook blocks commits with an unencrypted Secret or a leaked credential |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) as a Flux HelmRelease from an OCI registry |
-| Updates | Self-hosted Renovate runs hourly on a GitHub App and covers 15 repos; low-risk updates merge on their own, usually after a 3-day wait, and majors wait for a Monday review |
+| Updates | Self-hosted Renovate runs hourly on a GitHub App and covers 13 repos; low-risk updates merge on their own, usually after a 3-day wait, and majors wait for a Monday review |
 | CI | GitHub Actions: kubeconform on every Flux path (strict schemas, SHA-pinned actions) and a full-history gitleaks scan. These report problems; they are not required checks |
 | Workload security | App containers run as non-root; the public dashboard pod has no API token, a restricted-level security context and a NetworkPolicy; `main` is protected from force pushes and deletion |
 
@@ -66,7 +66,7 @@ All four machines share a TESmart 4-port HDMI KVM switch and a Dell S2725QS moni
 ## What's Built
 
 ### Kubernetes on Azure (AKS)
-A production-style AKS platform built in the KubeCraft Kubernetes in the Cloud course (private repo, `blockone-workflows`). Terraform provisions the infrastructure, with one reusable module that onboards a customer end to end across staging and production clusters. On top of that: Flux GitOps, Azure Key Vault secret sync, Traefik and cert-manager, CloudNativePG databases with backups and point-in-time restores to Azure Blob Storage, Entra ID cluster access, separate node pools with upgrade and maintenance windows, Pod Security Standards with network policies, and kube-prometheus-stack with Grafana alerts.
+A production-style AKS platform built in the KubeCraft Kubernetes in the Cloud course (private repo, `azure-aks-terraform`, archived). Terraform provisions the infrastructure, with one reusable module that onboards a customer end to end across staging and production clusters. On top of that: Flux GitOps, Azure Key Vault secret sync, Traefik and cert-manager, CloudNativePG databases with backups and point-in-time restores to Azure Blob Storage, Entra ID cluster access, separate node pools with upgrade and maintenance windows, Pod Security Standards with network policies, and kube-prometheus-stack with Grafana alerts.
 
 ### CI/CD and GitOps Pipeline
 A release pipeline built in the KubeCraft DevOps Masterclass (private repos `devops-study-app` and `devops-study-app-gitops`). The small study tracker app and its tests come from the course. Pull requests run Ruff, pytest with an 80% coverage floor, a Trivy image scan and an end-to-end test on a k3d cluster. release-please creates releases from Conventional Commits, images go to GHCR, and CI updates the GitOps repo. Flux deploys dev, and the prod tag goes through a pull request.
@@ -137,10 +137,10 @@ Platform engineering and other:
 
 - [homelab-dashboard](https://github.com/turpinator-x/homelab-dashboard) (AI-assisted): source, tests, Dockerfile and CI for the public dashboard
 - [lab](https://github.com/turpinator-x/lab): course exercises (Bash, Docker, Kubernetes YAML, containerlab networking write-ups, a Cilium sandbox)
-- `blockone-workflows` (private): Terraform and GitOps for the AKS platform
+- `azure-aks-terraform` (private, archived): Terraform and GitOps for the AKS platform
 - `devops-study-app` and `devops-study-app-gitops` (private): the DevOps Masterclass pipeline and its GitOps repo
 - `dotfiles` (private): chezmoi-managed configuration for all four machines
-- `python-docker-ai` (private): the local AI PDF Q&A stack
+- `python-docker-ai` (private, archived): the local AI PDF Q&A stack
 - `15m-workstation` (private): deploy and backup automation
 - `claims-app` (private, AI-assisted): [Crypto Lighthouse](https://cryptolighthouse.io), a live non-custodial crypto site built with Claude Code
 - Obsidian knowledge base (private): 380+ technical notes
