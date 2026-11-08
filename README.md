@@ -16,7 +16,7 @@ I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise I
 | Cluster | Two-node k3s (v1.36): a mini PC control plane and a Raspberry Pi 5 worker, mixed amd64 and arm64 |
 | GitOps | FluxCD reconciles [`clusters/staging`](clusters/staging) every minute over a read-only deploy key; Kustomize base and overlays in [`apps/`](apps) |
 | Public apps | [Linkding](https://github.com/sissbruecker/linkding), [Audiobookshelf](https://github.com/advplyr/audiobookshelf) and the AI-assisted dashboard, through Cloudflare Tunnels with no inbound ports open |
-| AI platform | A small language model served on CPU by llama.cpp (AI-assisted, in progress): model file pinned by SHA-256 and checked before start, locked-down pod, NetworkPolicy tested both ways, Prometheus metrics, a Grafana dashboard and alerts. See [docs/llm.md](docs/llm.md) |
+| AI platform | A small language model served on CPU by llama.cpp on both nodes, behind an agentgateway gateway (AI-assisted, in progress): API keys, per-key request and token limits, failover between nodes, model file pinned by SHA-256, locked-down pods and NetworkPolicy, Prometheus metrics including time to first token, a Grafana dashboard and alerts. Gateway chosen over LiteLLM after its 2026 supply-chain compromises ([decision record](docs/llm-gateway-decision.md)). See [docs/llm.md](docs/llm.md) |
 | LAN apps | [Homepage](https://gethomepage.dev) start page with Ingress auto-discovery and read-only RBAC; Traefik Ingress for LAN hostnames |
 | Secrets | SOPS and age, decrypted by Flux; a pre-commit hook blocks commits with an unencrypted Secret or a leaked credential |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) as a Flux HelmRelease from an OCI registry |
@@ -50,7 +50,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 
 - [ ] Trusted LAN certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare)
 - [ ] Alertmanager receivers and an automated node upgrade process
-- [ ] A self-hosted model platform: a small model on CPU with a pinned, checked model file, metrics, a dashboard and alerts (phase 1), then a gateway, an SLO on time to first token, and a failure drill. See [docs/llm.md](docs/llm.md)
+- [ ] A self-hosted model platform: a small model on CPU with a pinned, checked model file, metrics, a dashboard and alerts (phase 1) and a gateway with keys, limits and failover (phase 2) are running. Next: an SLO on time to first token, then a failure drill. See [docs/llm.md](docs/llm.md)
 - [ ] A Talos test cluster, then a three-control-plane rebuild
 - [ ] CKA certification
 

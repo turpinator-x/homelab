@@ -31,7 +31,7 @@ flowchart LR
 | Phase | What | Status |
 |---|---|---|
 | 1 | Model server: pinned model, download check, probes, limits, NetworkPolicy, metrics, dashboard, basic alerts | Deployed 2026-11-07 (#22), checked on the cluster |
-| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Built and tested on my laptop. Keys in place. Waiting on review before deploying ([decision record](llm-gateway-decision.md)) |
+| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Deployed 2026-11-08 (#24), checked on the cluster. Failover drill waits for phase 4 ([decision record](llm-gateway-decision.md)) |
 | 3 | SLO on time to first token, with a load test and an error-budget alert | After the gateway, which measures it per request |
 | 4 | Failure drill and postmortem, demo, cost note | Last |
 
@@ -64,7 +64,22 @@ On my laptop, in Docker, with the cluster's security settings (non-root, read-on
 
 **Found in testing:** in this simple config mode, v1.7.0 has no retry setting (the config is refused with "unknown field `retry`"). So the one request that finds the primary down fails with 503 before failover starts. Clients should retry once on a 503. The full routing mode has retries, and it's worth switching to if one failed request matters.
 
-**Not tested yet:** anything on the cluster. That waits for review. Then: the check script against the cluster, the NetworkPolicy blocks with controls as in phase 1, failover by scaling the primary to 0 through Git, and the alerts.
+On the cluster, after Flux deployed it (2026-11-08):
+
+| Test | Result |
+|---|---|
+| Deploy | Flux Ready at the merge commit. Gateway and primary up in seconds; the backup downloaded its model on pisrv01 ("checksum matches") and was Ready in under 2 minutes |
+| `scripts/llm-gateway-check.sh` with my key | All 5 checks passed: no key 401, wrong key 401, real key 200, token and time-to-first-token metrics present |
+| A pod in another namespace (homepage) calling the gateway, and the model server | Refused both times. Control: the same pod reaches Linkding and Grafana in other namespaces |
+| Prometheus | Targets `gateway`, `model-server` and `model-server-backup` all up |
+| Alert rules | `GatewayDown`, `ModelServerDown`, `ModelServerBackupDown`, `ModelServerQueueing` loaded, healthy, inactive |
+
+**The model is small, and it shows.** Asked "What is 2+2? Answer with a number.", it answered "3" on the cluster (it said "4" on my laptop). The check script only checks that a real key gets an answer, not that the answer is right. Checking answers is project P2's job: a release gated on an evaluation.
+
+**Not tested yet on the cluster:**
+- That pods inside `llm`, other than the gateway, can't reach the models. Every pod in `llm` has outbound rules of its own, so there's no fair client to test from yet. The phase 3 load-test pod will be that client.
+- That the gateway can't reach the internet. Its image has no shell to test from.
+- Failover on the cluster, and an alert firing. Both are part of the phase 4 drill, done through Git: scale the primary to 0, watch the backup answer and `ModelServerDown` fire, then scale back.
 
 **Keys:** the `gateway-keys` Secret in `apps/staging/llm/` holds two random keys (48 hex characters after `sk-`), encrypted with SOPS. To read one: `sops -d apps/staging/llm/gateway-keys-secret.yaml`.
 

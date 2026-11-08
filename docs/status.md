@@ -13,7 +13,7 @@ _Last updated: 2026-11-07_
 | Linkding | `apps/*/linkding` | public via Cloudflare Tunnel; `linkding-tasks` sidecar runs background jobs |
 | Audiobookshelf | `apps/*/audiobookshelf` | public, own tunnel, pinned to minisrv01 (local-path volumes) |
 | Dashboard | `apps/*/dashboard` | image from `homelab-dashboard` repo (GHCR), NetworkPolicy, no SA token |
-| Model server | `apps/*/llm` | phase 1 of the model platform: llama.cpp on CPU, model pinned by SHA-256, NetworkPolicy tested both ways, metrics, dashboard, alerts |
+| Model platform | `apps/*/llm` | llama.cpp on CPU on both nodes behind an agentgateway gateway: API keys, per-key limits, failover, metrics including time to first token, alerts. Phases 1 and 2 of 4 |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
 | Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 14 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
@@ -26,7 +26,7 @@ _Last updated: 2026-11-07_
 
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
-3. Self-hosted model platform (`docs/llm.md`): phase 2, the gateway, is built and tested on my laptop. Keys are in place (SOPS). It's waiting on review before it deploys.
+3. Self-hosted model platform (`docs/llm.md`): phase 3, an SLO on time to first token with a streaming load test. Phase 2 (gateway) deployed 2026-11-08.
 4. Later: test cluster (Talos) and 3-control-plane rebuild. See `decisions.md`.
 
 ## Known issues
