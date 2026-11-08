@@ -31,7 +31,7 @@ flowchart LR
 | Phase | What | Status |
 |---|---|---|
 | 1 | Model server: pinned model, download check, probes, limits, NetworkPolicy, metrics, dashboard, basic alerts | Deployed 2026-11-07 (#22), checked on the cluster |
-| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Built and tested on my laptop. Waiting on API keys and review before deploying ([decision record](llm-gateway-decision.md)) |
+| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Built and tested on my laptop. Keys in place. Waiting on review before deploying ([decision record](llm-gateway-decision.md)) |
 | 3 | SLO on time to first token, with a load test and an error-budget alert | After the gateway, which measures it per request |
 | 4 | Failure drill and postmortem, demo, cost note | Last |
 
@@ -64,9 +64,9 @@ On my laptop, in Docker, with the cluster's security settings (non-root, read-on
 
 **Found in testing:** in this simple config mode, v1.7.0 has no retry setting (the config is refused with "unknown field `retry`"). So the one request that finds the primary down fails with 503 before failover starts. Clients should retry once on a 503. The full routing mode has retries, and it's worth switching to if one failed request matters.
 
-**Not tested yet:** anything on the cluster. That waits for the API keys (below) and review. Then: the check script against the cluster, the NetworkPolicy blocks with controls as in phase 1, failover by scaling the primary to 0 through Git, and the alerts.
+**Not tested yet:** anything on the cluster. That waits for review. Then: the check script against the cluster, the NetworkPolicy blocks with controls as in phase 1, failover by scaling the primary to 0 through Git, and the alerts.
 
-**Before it can deploy:** the `gateway-keys` Secret. Two random keys, encrypted with SOPS before they're committed.
+**Keys:** the `gateway-keys` Secret in `apps/staging/llm/` holds two random keys (48 hex characters after `sk-`), encrypted with SOPS. To read one: `sops -d apps/staging/llm/gateway-keys-secret.yaml`.
 
 ## Design choices (phase 1)
 

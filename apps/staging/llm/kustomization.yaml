@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: llm
 resources:
   - ../../base/llm/
+  - gateway-keys-secret.yaml # SOPS-encrypted API keys for the gateway
