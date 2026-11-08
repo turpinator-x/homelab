@@ -2,6 +2,10 @@
 
 Short records of why things are the way they are. Newest first. Each entry: the decision, why, and what was rejected.
 
+## 2026-11-08 — agentgateway in front of the model, not LiteLLM
+
+The model platform's gateway (keys, token rate limits, failover, time-to-first-token metrics) will be agentgateway, run standalone from a SOPS-encrypted config. **Why:** one container with no database or Redis, foundation-run, Apache-2.0, amd64 + arm64. **Rejected:** LiteLLM (its PyPI packages were compromised in March 2026, and its PyPI packages and official images in October 2026), Envoy AI Gateway (a second ingress controller plus Redis on two nodes), Bifrost (company-owned, failover leans on the paid tier). Full record: [llm-gateway-decision.md](llm-gateway-decision.md).
+
 ## 2026-10-22 — Renovate auto-merges small updates
 
 Patch, digest and pin updates (plus GitHub Actions minors and the dashboard image) merge automatically after CI passes and a 3-day release age. Majors and other minors wait for a Monday review. **Why:** weekly PR review was mostly rubber-stamping patches. **Rejected:** an AI agent merging on its own verdict (ignores CI, open to prompt injection from PR text).

@@ -32,7 +32,7 @@ flowchart LR
 | Phase | What | Status |
 |---|---|---|
 | 1 | Model server: pinned model, download check, probes, limits, NetworkPolicy, metrics, dashboard, basic alerts | Deployed 2026-11-07 (#22), checked on the cluster |
-| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Next. The gateway choice gets a decision record first |
+| 2 | Gateway in front of the model: one API, keys, rate limits, request logs, failover to a second model | Next. Gateway chosen: agentgateway ([decision record](llm-gateway-decision.md)) |
 | 3 | SLO on time to first token, with a load test and an error-budget alert | After the gateway, which measures it per request |
 | 4 | Failure drill and postmortem, demo, cost note | Last |
 
