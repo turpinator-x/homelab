@@ -51,6 +51,7 @@ spec:
                 - turpinator-x/devops-study-app-gitops
                 - turpinator-x/chain-explorer
                 - turpinator-x/blockone-devops-ai-journey
+                - turpinator-x/turpinator-x
               envFrom:
                 - configMapRef:
                     name: renovate-configmap
