@@ -143,7 +143,7 @@ Platform engineering and other:
 - `python-docker-ai` (private): the local AI PDF Q&A stack
 - `15m-workstation` (private): deploy and backup automation
 - `claims-app` (private, AI-assisted): [Crypto Lighthouse](https://cryptolighthouse.io), a live non-custodial crypto site built with Claude Code
-- Obsidian knowledge base (private): 250+ technical notes
+- Obsidian knowledge base (private): 380+ technical notes
 
 ## Connect
 
