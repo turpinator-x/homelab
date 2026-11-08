@@ -43,7 +43,7 @@ flowchart LR
 - **Updates:** Renovate runs hourly as a CronJob and covers 13 repos, listed in the `args` of `infrastructure/controllers/base/renovate/cronjob.yaml`. It opens pull requests for new versions, signed in as a GitHub App: an init container exchanges the app's key for a token that expires in an hour, so there is no long-lived token to renew. In this repo, small updates (patch, digest, GitHub Actions minors) merge automatically once CI passes and the release is 3 days old; majors and other minors wait for a weekly review. See [docs/gitops-apps.md](docs/gitops-apps.md).
 - **CI:** a GitHub Actions workflow builds every Flux path and validates it with kubeconform (`-strict`, Kubernetes and Flux CRD schemas) on every push and pull request, so a Renovate PR or a misplaced key shows a red cross before Flux applies it. The same `scripts/validate.sh` runs on the laptop; `mise.toml` pins the tool version for both.
 - **Apps:** Linkding (bookmarks) and Audiobookshelf (audiobooks and podcasts, the course capstone: translated from Docker Compose, four persistent volumes, non-root, its own tunnel). See [docs/audiobookshelf.md](docs/audiobookshelf.md). Dashboard: a public status page (Python, FastAPI; app code written by Claude Code, AI-assisted) that reads fixed queries from Prometheus, built into a multi-arch image by its own repo's CI and published to GHCR; it runs with no API token, the restricted pod security settings and a NetworkPolicy. See [docs/dashboard.md](docs/dashboard.md).
-- **Next:** LAN DNS and trusted certificates (cert-manager), and the PDF Q&A AI stack as a platform service.
+- **Next:** LAN DNS and trusted certificates (cert-manager), and a self-hosted model platform (`docs/llm.md`).
 
 ## Sync Strategy
 

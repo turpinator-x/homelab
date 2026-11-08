@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-06_
+_Last updated: 2026-11-07_
 
 ## Running
 
@@ -25,7 +25,7 @@ _Last updated: 2026-11-06_
 
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
-3. PDF Q&A AI stack as a cluster platform service.
+3. Self-hosted model platform (`apps/*/llm`, `docs/llm.md`): phase 1, the model server, is built and in review. After it deploys, check the pod, the NetworkPolicy, the scrape, the dashboard and the alerts. Then phase 2, the gateway.
 4. Later: test cluster (Talos) and 3-control-plane rebuild. See `decisions.md`.
 
 ## Known issues

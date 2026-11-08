@@ -40,6 +40,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 - [docs/monitoring.md](docs/monitoring.md): monitoring
 - [docs/audiobookshelf.md](docs/audiobookshelf.md): translating a Docker Compose app into Kubernetes manifests
 - [docs/dashboard.md](docs/dashboard.md): the public dashboard
+- [docs/llm.md](docs/llm.md): a self-hosted model platform, in progress (AI-assisted)
 - [docs/homepage.md](docs/homepage.md): the LAN start page
 - [docs/decisions.md](docs/decisions.md): design choices and their reasons
 - [docs/status.md](docs/status.md): current work and known issues
@@ -48,7 +49,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 
 - [ ] Trusted LAN certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare)
 - [ ] Alertmanager receivers and an automated node upgrade process
-- [ ] The PDF Q&A AI stack as a cluster platform service (Helm chart, metrics, model comparison)
+- [ ] A self-hosted model platform: a small model on CPU with a pinned, checked model file, metrics, a dashboard and alerts (phase 1), then a gateway, an SLO on time to first token, and a failure drill. See [docs/llm.md](docs/llm.md)
 - [ ] A Talos test cluster, then a three-control-plane rebuild
 - [ ] CKA certification
 
