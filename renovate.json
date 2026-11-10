@@ -1,56 +1,109 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "ignorePaths": ["clusters/staging/flux-system/**", ".github/workflows/secret-scan.yaml"],
+  "extends": [
+    "config:recommended"
+  ],
+  "ignorePaths": [
+    "clusters/staging/flux-system/**",
+    ".github/workflows/secret-scan.yaml"
+  ],
   "kubernetes": {
-    "managerFilePatterns": ["/\\.yaml$/"]
+    "managerFilePatterns": [
+      "/\\.yaml$/"
+    ]
   },
   "flux": {
-    "managerFilePatterns": ["/\\.yaml$/"]
+    "managerFilePatterns": [
+      "/\\.yaml$/"
+    ]
   },
   "timezone": "America/Los_Angeles",
-  "schedule": ["before 6am on monday"],
+  "schedule": [
+    "before 6am on monday"
+  ],
   "minimumReleaseAge": "3 days",
   "platformAutomerge": false,
   "packageRules": [
     {
       "description": "Low risk: patch and digest updates merge on their own once CI passes",
-      "matchUpdateTypes": ["patch", "digest", "pin", "pinDigest"],
+      "matchUpdateTypes": [
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": [
+        "at any time"
+      ]
     },
     {
       "description": "Low risk: minor updates of GitHub Actions",
-      "matchUpdateTypes": ["minor"],
-      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchManagers": [
+        "github-actions"
+      ],
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": [
+        "at any time"
+      ]
     },
     {
       "description": "Low risk: minor updates of Renovate's own image",
-      "matchUpdateTypes": ["minor"],
-      "matchDepNames": ["renovate/renovate"],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchDepNames": [
+        "renovate/renovate"
+      ],
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": [
+        "at any time"
+      ]
     },
     {
       "description": "My own dashboard image: I release it, so deploy patch and minor versions straight away",
-      "matchDepNames": ["ghcr.io/turpinator-x/homelab-dashboard"],
-      "matchUpdateTypes": ["patch", "minor"],
+      "matchDepNames": [
+        "ghcr.io/turpinator-x/homelab-dashboard"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
       "minimumReleaseAge": "0 days",
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": [
+        "at any time"
+      ]
     },
     {
       "description": "llama.cpp ships several builds a day, tagged server-b<number>, and each one is new. Hold them for the weekly review instead of a PR a day",
-      "matchDepNames": ["ghcr.io/ggml-org/llama.cpp"],
+      "matchDepNames": [
+        "ghcr.io/ggml-org/llama.cpp"
+      ],
       "versioning": "regex:^server-b(?<major>\\d+)$",
       "automerge": false,
-      "schedule": ["before 6am on monday"]
+      "schedule": [
+        "before 6am on monday"
+      ]
+    },
+    {
+      "description": "Docker 29.6+ gives `docker exec` a umask of 0000 inside Docker-in-Docker (files become world-writable), which breaks the curriculum's permission lessons on the homelab runners. Hold dind at 29.5.x until a newer release is re-tested: see docs/github-runners.md",
+      "matchFileNames": [
+        "infrastructure/arc/**"
+      ],
+      "matchDepNames": [
+        "docker"
+      ],
+      "allowedVersions": "<29.6.0"
     },
     {
       "description": "Majors always wait for the weekly review",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false
     }
   ]

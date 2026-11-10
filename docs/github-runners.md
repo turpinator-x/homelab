@@ -58,3 +58,7 @@ Order: the curriculum's `lesson-tests` first (the most minutes), then Crypto Lig
 The first real job on a dind runner (2026-11-10) hung at `apt-get update`. The pod network carries packets of at most 1450 bytes (flannel's VXLAN takes 50 bytes for its own header), but Docker inside the pod gave its bridge the default 1500. Small requests worked, but large replies were dropped without an error, so downloads stalled.
 
 The dind scale sets therefore write the pod template out in full instead of using `containerMode: dind`. Their dind sidecar is pinned and starts dockerd with the pod's own MTU. It also adds a TCP MSS clamp, so containers nested one level deeper (Docker inside a job's container, as the curriculum's Stage 3 does) don't hit the same drop. To check a running pod: `docker network inspect bridge` inside the dind container should show MTU 1450.
+
+## Docker-in-Docker and file permissions (umask)
+
+The same first test run also failed the curriculum's permissions lesson: new files came out as `-rw-rw-rw-`. Since Docker 29.6.0, commands started with `docker exec` inside Docker-in-Docker get a umask of 0000 instead of 0022. Plain `docker run` and Docker on a normal host are not affected. Tested 2026-11-10: 28.5.2, 29.4.0 and 29.5.2 give 0022; 29.6.0 to 29.9.2 give 0000. The dind sidecar is held at 29.5.2 (a Renovate rule keeps it below 29.6). To re-test a newer release: start `docker:<version>-dind` privileged, run a container inside it, and check that `docker exec <container> sh -c umask` prints 0022.
