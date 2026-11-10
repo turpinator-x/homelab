@@ -75,12 +75,64 @@ spec:
     minRunners: 0
     maxRunners: 1
     controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
-    containerMode:
-      type: dind
+    # Docker-in-Docker, written out in full instead of `containerMode: dind` so the dind sidecar can be
+    # configured and pinned. The pod network's MTU is 1450 (flannel VXLAN), but Docker's bridge defaults
+    # to 1500, so big packets from job containers were dropped and downloads hung. dockerd takes the
+    # pod's MTU, and TCP MSS clamping covers containers nested further down (Docker inside a job container).
     template:
       spec:
         nodeSelector:
           kubernetes.io/hostname: minisrv01
+        initContainers:
+          - name: init-dind-externals
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+            volumeMounts:
+              - { name: dind-externals, mountPath: /home/runner/tmpDir }
+            resources:
+              requests: { cpu: 100m, memory: 128Mi }
+              limits: { cpu: 500m, memory: 512Mi }
+          - name: dind
+            image: docker:29.9.2-dind
+            restartPolicy: Always
+            command: ["/bin/sh", "-ec"]
+            args:
+              - |
+                mtu=$(cat /sys/class/net/eth0/mtu)
+                iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu"
+            # Docker builds and the jobs' containers run here, so dind gets most of the pod's share.
+            # Runner + dind = 4 CPU / 7Gi, so both dind scale sets fit the namespace quota (8 CPU / 14Gi).
+            resources:
+              requests: { cpu: 500m, memory: 1Gi }
+              limits: { cpu: "3", memory: 5Gi }
+            securityContext:
+              privileged: true
+            startupProbe:
+              exec: { command: ["docker", "info"] }
+              failureThreshold: 24
+              periodSeconds: 5
+            volumeMounts:
+              - { name: work, mountPath: /home/runner/_work }
+              - { name: dind-sock, mountPath: /var/run }
+              - { name: dind-externals, mountPath: /home/runner/externals }
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["/home/runner/run.sh"]
+            env:
+              - { name: DOCKER_HOST, value: unix:///var/run/docker.sock }
+              - { name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS, value: "120" }
+            resources:
+              requests: { cpu: 250m, memory: 512Mi }
+              limits: { cpu: "1", memory: 2Gi }
+            volumeMounts:
+              - { name: work, mountPath: /home/runner/_work }
+              - { name: dind-sock, mountPath: /var/run }
+        volumes:
+          - { name: work, emptyDir: {} }
+          - { name: dind-sock, emptyDir: {} }
+          - { name: dind-externals, emptyDir: {} }
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -99,9 +151,61 @@ spec:
     minRunners: 0
     maxRunners: 1
     controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
-    containerMode:
-      type: dind
+    # Docker-in-Docker, written out in full instead of `containerMode: dind` so the dind sidecar can be
+    # configured and pinned. The pod network's MTU is 1450 (flannel VXLAN), but Docker's bridge defaults
+    # to 1500, so big packets from job containers were dropped and downloads hung. dockerd takes the
+    # pod's MTU, and TCP MSS clamping covers containers nested further down (Docker inside a job container).
     template:
       spec:
         nodeSelector:
           kubernetes.io/hostname: minisrv01
+        initContainers:
+          - name: init-dind-externals
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+            volumeMounts:
+              - { name: dind-externals, mountPath: /home/runner/tmpDir }
+            resources:
+              requests: { cpu: 100m, memory: 128Mi }
+              limits: { cpu: 500m, memory: 512Mi }
+          - name: dind
+            image: docker:29.9.2-dind
+            restartPolicy: Always
+            command: ["/bin/sh", "-ec"]
+            args:
+              - |
+                mtu=$(cat /sys/class/net/eth0/mtu)
+                iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu"
+            # Docker builds and the jobs' containers run here, so dind gets most of the pod's share.
+            # Runner + dind = 4 CPU / 7Gi, so both dind scale sets fit the namespace quota (8 CPU / 14Gi).
+            resources:
+              requests: { cpu: 500m, memory: 1Gi }
+              limits: { cpu: "3", memory: 5Gi }
+            securityContext:
+              privileged: true
+            startupProbe:
+              exec: { command: ["docker", "info"] }
+              failureThreshold: 24
+              periodSeconds: 5
+            volumeMounts:
+              - { name: work, mountPath: /home/runner/_work }
+              - { name: dind-sock, mountPath: /var/run }
+              - { name: dind-externals, mountPath: /home/runner/externals }
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["/home/runner/run.sh"]
+            env:
+              - { name: DOCKER_HOST, value: unix:///var/run/docker.sock }
+              - { name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS, value: "120" }
+            resources:
+              requests: { cpu: 250m, memory: 512Mi }
+              limits: { cpu: "1", memory: 2Gi }
+            volumeMounts:
+              - { name: work, mountPath: /home/runner/_work }
+              - { name: dind-sock, mountPath: /var/run }
+        volumes:
+          - { name: work, emptyDir: {} }
+          - { name: dind-sock, emptyDir: {} }
+          - { name: dind-externals, emptyDir: {} }
