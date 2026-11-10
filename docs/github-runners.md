@@ -52,3 +52,9 @@ Order: the curriculum's `lesson-tests` first (the most minutes), then Crypto Lig
 - The repo's Settings, Actions, Runners page lists the scale set as online.
 - A `workflow_dispatch` run on `homelab-<repo>` creates a pod in the runner namespace, passes, and the pod is gone afterwards.
 - Failure path: with the Secret missing, the listener reports an authentication error and no job is picked up; jobs on `ubuntu-26.04` are unaffected.
+
+## Docker-in-Docker and the network's packet size (MTU)
+
+The first real job on a dind runner (2026-11-10) hung at `apt-get update`. The pod network carries packets of at most 1450 bytes (flannel's VXLAN takes 50 bytes for its own header), but Docker inside the pod gave its bridge the default 1500. Small requests worked, but large replies were dropped without an error, so downloads stalled.
+
+The dind scale sets therefore write the pod template out in full instead of using `containerMode: dind`. Their dind sidecar is pinned and starts dockerd with the pod's own MTU. It also adds a TCP MSS clamp, so containers nested one level deeper (Docker inside a job's container, as the curriculum's Stage 3 does) don't hit the same drop. To check a running pod: `docker network inspect bridge` inside the dind container should show MTU 1450.
