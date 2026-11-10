@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-07_
+_Last updated: 2026-11-10_
 
 ## Running
 
@@ -24,6 +24,7 @@ _Last updated: 2026-11-07_
 
 ## Next
 
+0. **In progress:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization). Built on branch `feat/arc-runners`; waits for the GitHub App credentials, then a repo-by-repo switch. See `docs/github-runners.md`.
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
 3. Self-hosted model platform (`docs/llm.md`): phase 3, an SLO on time to first token with a streaming load test. Phase 2 (gateway) deployed 2026-11-08.

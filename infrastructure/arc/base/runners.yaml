@@ -1,0 +1,107 @@
+# One runner scale set per repository: GitHub only lets a personal account register runners per repo.
+# Each starts at zero runners, makes one ephemeral pod per job, and deletes it when the job ends.
+# Workflows opt in with `runs-on: homelab-<repo>`; until then they keep using GitHub's runners.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: gha-runner-scale-set
+  namespace: arc-runners
+spec:
+  interval: 12h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  ref:
+    tag: "0.15.1"
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: gha-runner-scale-set
+  namespace: arc-runners-dind
+spec:
+  interval: 12h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  ref:
+    tag: "0.15.1"
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homelab-claims-app
+  namespace: arc-runners
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: gha-runner-scale-set
+  values:
+    githubConfigUrl: https://github.com/turpinator-x/claims-app
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: homelab-claims-app
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
+    template:
+      spec:
+        nodeSelector:
+          kubernetes.io/hostname: minisrv01
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["/home/runner/run.sh"]
+            resources:
+              requests: { cpu: 500m, memory: 1Gi }
+              limits: { cpu: "3", memory: 6Gi }
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homelab-blockone-devops-ai-journey
+  namespace: arc-runners-dind
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: gha-runner-scale-set
+  values:
+    githubConfigUrl: https://github.com/turpinator-x/blockone-devops-ai-journey
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: homelab-blockone-devops-ai-journey
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
+    containerMode:
+      type: dind
+    template:
+      spec:
+        nodeSelector:
+          kubernetes.io/hostname: minisrv01
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homelab-devops-study-app
+  namespace: arc-runners-dind
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: gha-runner-scale-set
+  values:
+    githubConfigUrl: https://github.com/turpinator-x/devops-study-app
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: homelab-devops-study-app
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
+    containerMode:
+      type: dind
+    template:
+      spec:
+        nodeSelector:
+          kubernetes.io/hostname: minisrv01

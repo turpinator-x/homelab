@@ -33,3 +33,10 @@ Only `data`/`stringData` are encrypted, so manifests stay readable in review. A 
 ## Cloudflare Tunnel for public apps
 
 Outbound-only tunnels, one per app, two replicas each. **Why:** no router ports open and the home IP stays out of DNS.
+
+## 2026-11-10: self-hosted runners with ARC, and a privileged namespace for Docker-in-Docker
+
+- **Decision:** run my private repos' GitHub Actions jobs on the cluster with Actions Runner Controller (ephemeral pods, one scale set per repo), not a long-lived runner service on minisrv01.
+- **Why:** private-repo minutes ran out (1,970 of 2,000 in ten days). Ephemeral pods start clean for every job, are deployed and capped through Git like everything else, and need no SSH access to the host.
+- **Exception to the non-root rule:** `arc-runners-dind` allows privileged pods because Docker-in-Docker needs them (the curriculum tests start privileged test containers, the study app builds images and runs k3d). Limited to my own private repos, capped by a ResourceQuota, and kept apart from `arc-runners` (baseline), which serves jobs that need no Docker. Public repos never use self-hosted runners.
+- **Revisit:** if a rootless builder (BuildKit rootless, Kaniko) can replace Docker-in-Docker for these jobs.
