@@ -93,7 +93,7 @@ spec:
               requests: { cpu: 100m, memory: 128Mi }
               limits: { cpu: 500m, memory: 512Mi }
           - name: dind
-            image: docker:29.9.2-dind
+            image: docker:29.5.2-dind  # held below 29.6: see docs/github-runners.md (umask)
             restartPolicy: Always
             command: ["/bin/sh", "-ec"]
             args:
@@ -169,7 +169,7 @@ spec:
               requests: { cpu: 100m, memory: 128Mi }
               limits: { cpu: 500m, memory: 512Mi }
           - name: dind
-            image: docker:29.9.2-dind
+            image: docker:29.5.2-dind  # held below 29.6: see docs/github-runners.md (umask)
             restartPolicy: Always
             command: ["/bin/sh", "-ec"]
             args:
