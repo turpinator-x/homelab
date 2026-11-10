@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+---
+# Runners that need no Docker (claims-app): ordinary pods.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+# Runners with Docker inside (curriculum lesson tests, devops-study-app builds and k3d). Docker-in-Docker needs
+# privileged pods, so this namespace is kept separate and only serves my own private repos.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners-dind
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
