@@ -41,7 +41,7 @@ spec:
                 - turpinator-x/homelab-dashboard
                 - turpinator-x/claims-app
                 - turpinator-x/lab
-                - turpinator-x/crypto-cost-basis
+                - turpinator-x/blockone-crypto-tax
                 - turpinator-x/blockone-site
                 - turpinator-x/15m-workstation
                 - turpinator-x/dotfiles
