@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blockone-crypto-tax
+  labels:
+    # Every pod here meets the restricted Pod Security level; the API server refuses any that doesn't
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled # keep the data if the app is turned off

@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-10_
+_Last updated: 2026-11-11_
 
 ## Running
 
@@ -24,6 +24,7 @@ _Last updated: 2026-11-10_
 
 ## Next
 
+0. **In progress:** BlockOne Crypto Tax tester app (`apps/*/blockone-crypto-tax`, own `blockone-crypto-tax` Kustomization): API, worker and PostgreSQL behind its own tunnel and Cloudflare Access. Built on branch `feat/blockone-crypto-tax`; waits for the first image, the SOPS Secrets and the Access application. Image digest is a placeholder until then. See `docs/blockone-crypto-tax.md`.
 0. **In progress:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization). Built on branch `feat/arc-runners`; waits for the GitHub App credentials, then a repo-by-repo switch. See `docs/github-runners.md`.
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.

@@ -1,0 +1,15 @@
+# Case workspaces (uploads, ledgers, generated reports and forms) for every taxpayer, plus the engine's caches.
+# The API and the worker both mount it, so they run on the same node (local-path volumes are node-local).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: blockone-data
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled # keep client data if the app is turned off
+spec:
+  storageClassName: local-path-retain
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

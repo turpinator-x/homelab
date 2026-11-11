@@ -1,0 +1,136 @@
+# The API (FastAPI under uvicorn), reached only through this namespace's cloudflared (Cloudflare Tunnel +
+# Access). The image is built by the app repo's CI; the staging overlay pins it by tag and digest.
+apiVersion: v1
+kind: Service
+metadata:
+  name: blockone-api
+  labels:
+    app: blockone-api
+spec:
+  selector:
+    app: blockone-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockone-api
+  labels:
+    app: blockone-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blockone-api
+  template:
+    metadata:
+      labels:
+        app: blockone-api
+        blockone-db-client: "true" # may reach PostgreSQL (networkpolicy.yaml)
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-pull # the image is private
+      nodeSelector:
+        kubernetes.io/hostname: minisrv01 # the data volume lives here
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Brings the schema up to date before the API starts (the worker runs the same step). Alembic does nothing
+        # when it's already at head. It fails, and Kubernetes retries, until PostgreSQL answers.
+        - name: migrate
+          image: ghcr.io/turpinator-x/blockone-crypto-tax
+          args: ["migrate"]
+          env:
+            - name: BLOCKONE_WEB_DB_PASSWORD # BLOCKONE_WEB_*: kept out of the engine's child processes
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+            - name: BLOCKONE_WEB_DATABASE_URL
+              value: postgresql+psycopg://blockone:$(BLOCKONE_WEB_DB_PASSWORD)@blockone-postgres:5432/blockone
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: api
+          image: ghcr.io/turpinator-x/blockone-crypto-tax
+          args: ["api"]
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: blockone-settings
+            - secretRef:
+                name: blockone-app # tax id keys, Cloudflare Access settings, allowed emails
+          env:
+            - name: BLOCKONE_WEB_DB_PASSWORD # BLOCKONE_WEB_*: kept out of the engine's child processes
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+            - name: BLOCKONE_WEB_DATABASE_URL
+              value: postgresql+psycopg://blockone:$(BLOCKONE_WEB_DB_PASSWORD)@blockone-postgres:5432/blockone
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp # uploads are spooled here before they're checked
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: blockone-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi

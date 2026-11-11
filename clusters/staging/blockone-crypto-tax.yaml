@@ -1,0 +1,20 @@
+# The BlockOne Crypto Tax tester app has its own Kustomization (like arc), not a line in apps/staging: its Secrets
+# and image are added after the manifests, and a problem here must not hold up the other apps.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: blockone-crypto-tax
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/staging/blockone-crypto-tax
+  prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
