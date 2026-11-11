@@ -4,13 +4,12 @@ namespace: blockone-crypto-tax
 resources:
   - ../../base/blockone-crypto-tax/
   - cloudflare.yaml
-  # SOPS-encrypted Secrets. Each one starts as the .example file next to it: copy it to the name below, fill it
-  # in, run `sops -e -i` on it, then uncomment its line. Steps: docs/blockone-crypto-tax.md
-  # - tunnel-credentials-secret.yaml
-  # - blockone-db-secret.yaml
-  # - blockone-app-secret.yaml
-  # - blockone-explorer-keys-secret.yaml
-  # - ghcr-pull-secret.yaml
+  # SOPS-encrypted Secrets (made from the .example files next to them; steps: docs/blockone-crypto-tax.md)
+  - tunnel-credentials-secret.yaml
+  - blockone-db-secret.yaml
+  - blockone-app-secret.yaml
+  - blockone-explorer-keys-secret.yaml
+  - ghcr-pull-secret.yaml
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
   # First image: built by the app repo's image workflow from main 8166548 (2026-11-11).
