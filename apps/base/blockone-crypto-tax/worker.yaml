@@ -1,0 +1,107 @@
+# The job worker: polls PostgreSQL for queued jobs (wallet checks, yearly runs) and runs each in a child process
+# against the taxpayer's case workspace. It calls public explorer and price APIs, so it holds their keys.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockone-worker
+  labels:
+    app: blockone-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blockone-worker
+  template:
+    metadata:
+      labels:
+        app: blockone-worker
+        blockone-db-client: "true" # may reach PostgreSQL (networkpolicy.yaml)
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-pull # the image is private
+      nodeSelector:
+        kubernetes.io/hostname: minisrv01 # the data volume lives here
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM lets the current job finish; a job still running after this is requeued once it times out
+      terminationGracePeriodSeconds: 300
+      initContainers:
+        # Same step as the API's, so the worker never runs new code against an old schema. If both run at
+        # once, PostgreSQL's transactional DDL makes the loser fail cleanly and Kubernetes retries it.
+        - name: migrate
+          image: ghcr.io/turpinator-x/blockone-crypto-tax
+          args: ["migrate"]
+          env:
+            - name: BLOCKONE_WEB_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+            - name: BLOCKONE_WEB_DATABASE_URL
+              value: postgresql+psycopg://blockone:$(BLOCKONE_WEB_DB_PASSWORD)@blockone-postgres:5432/blockone
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: worker
+          image: ghcr.io/turpinator-x/blockone-crypto-tax
+          args: ["worker"]
+          envFrom:
+            - configMapRef:
+                name: blockone-settings
+            - secretRef:
+                name: blockone-app # tax id keys (to write the case file), Cloudflare settings (validated)
+            - secretRef:
+                name: blockone-explorer-keys # ETHERSCAN_API_KEY, ALCHEMY_API_KEY, ...: passed to the engine
+                optional: true # without them the engine skips the chains that need a key
+          env:
+            - name: BLOCKONE_WEB_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+            - name: BLOCKONE_WEB_DATABASE_URL
+              value: postgresql+psycopg://blockone:$(BLOCKONE_WEB_DB_PASSWORD)@blockone-postgres:5432/blockone
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              memory: 2Gi # a yearly run builds the whole ledger and the PDFs in a child process
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp # each job's scratch folder
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: blockone-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi

@@ -2,6 +2,10 @@
 
 Short records of why things are the way they are. Newest first. Each entry: the decision, why, and what was rejected.
 
+## 2026-11-11 — BlockOne Crypto Tax tester app: own PostgreSQL, own Kustomization, Cloudflare Access
+
+The tester app gets a single-replica PostgreSQL StatefulSet in its namespace, migrations as an initContainer, its own Flux Kustomization and its own tunnel, with Cloudflare Access (two emails, one-time PIN) in front and the app checking Access's token again. **Why:** the cluster has no shared database or operator, and two testers don't justify one yet; an initContainer is idempotent and avoids re-creating an immutable Job on every image change; a separate Kustomization means missing Secrets or a bad manifest here can't stop the other apps reconciling. **Rejected for now:** CloudNativePG (revisit before real client data, for backups), a migration Job (immutable under Flux), adding it to `apps` (one failure blocks every app). NetworkPolicy limits egress by port and private range only; hostname allowlisting needs an egress proxy or Cilium. Full write-up: [blockone-crypto-tax.md](blockone-crypto-tax.md).
+
 ## 2026-11-08 — agentgateway in front of the model, not LiteLLM
 
 The model platform's gateway (keys, token rate limits, failover, time-to-first-token metrics) will be agentgateway, run standalone from a SOPS-encrypted config. **Why:** one container with no database or Redis, foundation-run, Apache-2.0, amd64 + arm64. **Rejected:** LiteLLM (its PyPI packages were compromised in March 2026, and its PyPI packages and official images in October 2026), Envoy AI Gateway (a second ingress controller plus Redis on two nodes), Bifrost (company-owned, failover leans on the paid tier). Full record: [llm-gateway-decision.md](llm-gateway-decision.md).

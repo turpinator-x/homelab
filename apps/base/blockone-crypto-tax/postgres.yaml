@@ -1,0 +1,114 @@
+# The app's own PostgreSQL: the cluster has no shared database or operator yet, and one small instance is
+# enough for a tester app. Only the API and the worker can reach it (networkpolicy.yaml).
+# Backups are not set up yet: see docs/blockone-crypto-tax.md.
+apiVersion: v1
+kind: Service
+metadata:
+  name: blockone-postgres
+  labels:
+    app: blockone-postgres
+spec:
+  clusterIP: None # headless: the StatefulSet's one pod
+  selector:
+    app: blockone-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: blockone-postgres
+  labels:
+    app: blockone-postgres
+spec:
+  serviceName: blockone-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blockone-postgres
+  template:
+    metadata:
+      labels:
+        app: blockone-postgres
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: minisrv01 # storage lives here, next to the app's volume
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999 # the image's postgres user
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: blockone
+            - name: POSTGRES_DB
+              value: blockone
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            # PostgreSQL 18 images keep the cluster in /var/lib/postgresql/18/docker (PGDATA's default)
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: local-path-retain
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
