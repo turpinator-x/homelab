@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main fbe4131: fix(blofin): treat Earn transfers as internal and book a closed round trip's int
+  # Built from the app repo's main c78e4da: Merge pull request #44 from turpinator-x/feat/staging-env
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-fbe4131927ac598c0fe63cf727085ee4592457e1
-    digest: sha256:1803967e805e3c5443bc721e7df378f79f8697254c3a608ddce5b49716b642ee
+    newTag: sha-c78e4daa15207b92a7554cbc73465b595e30613e
+    digest: sha256:6a2e695989a151737a90af05d39768b17c3570a996e946e9b066359ee5d9e29f
