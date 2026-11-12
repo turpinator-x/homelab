@@ -40,12 +40,14 @@ flowchart LR
 
 ## How staging is kept away from production
 
-- **Namespace.** Every object is in `blockone-staging`: the overlay's `namespace:` field, and Flux's `targetNamespace` as a second guard. `scripts/check-staging-isolation.sh` (run by `validate.sh`, so in CI too) fails the build if any staging object is cluster-scoped, in another namespace, or names production's namespace, and if production's list of rendered objects differs from `origin/main`'s. Tested: pointing the overlay's namespace at `blockone-crypto-tax` fails it, listing every object.
+- **Namespace.** Every object is in `blockone-staging`: the overlay's `namespace:` field, and Flux's `targetNamespace` as a second guard.
+- **CI check.** `scripts/check-staging-isolation.sh` (run by `validate.sh`, so in CI too, with the full history checked out) fails if: the staging build fails; any staging object is cluster-scoped or outside `blockone-staging`; the text `blockone-crypto-tax` appears anywhere in the staging render except the image name; the staging Flux Kustomization's name, path, `targetNamespace` or `prune` change; or **production's full render** (base included) differs from `origin/main`'s beyond app image lines. Image-only changes (promotions, Renovate pins) pass and are listed; any other production change needs the PR label **`production-change`** (CI then sets `BLOCKONE_ALLOW_PROD_CHANGE=1`), which the app repo's rollback PRs carry and only maintainers can set. A missing `origin/main` fails the check. Tested 2026-11-12: each of those failures, and an image-only change passing.
 - **Flux.** Its own Kustomization. Pruning can only delete what this Kustomization applied, which is only staging. Production's Kustomization, path and objects are untouched, so its `prune: true` has nothing new to act on.
 - **Network.** Each namespace has default-deny NetworkPolicies, and the allow rules select pods by label within their own namespace. A staging pod can't reach production's PostgreSQL or API (and the other way round).
 - **Data and secrets.** Its own PostgreSQL, password, tax id key and volume: no production value is copied. The demo data is synthetic (made-up exchange and wallet names, no addresses, no tax ids). The demo reset refuses unless the app is in staging mode and the data volume carries staging's marker file (or is empty), so even pointed at production it would delete nothing.
 - **Access.** Its own Cloudflare Access application and invite list, separate from production's; the app's own `BLOCKONE_WEB_ALLOWED_EMAILS` is separate too. The smoke-test service token is allowed only on the staging application, and the app refuses service tokens unless `BLOCKONE_WEB_SITE_MODE=staging`.
-- **Resources.** The quota caps staging well below what minisrv01 has spare (24 GiB node, about 5.4 GiB in use on 2026-11-12). Staging has no PriorityClass of its own; if the node ever runs short, production and staging compete equally (see Open items).
+- **Resources.** The quota caps staging well below what minisrv01 has spare (24 GiB node, about 5.4 GiB in use on 2026-11-12). Staging's pods use the **PriorityClass `blockone-staging`** (value -100, never preempts; `infrastructure/configs/base/scheduling`, cluster-scoped, applied by `infra-configs`, which staging's Kustomization depends on). Production keeps the default priority 0, so under memory pressure the scheduler and the kubelet's eviction order favour production. **Owner note:** this is the one cluster-scoped object the staging work adds; production's manifests are not changed for it.
+- **Disk.** `local-path` doesn't enforce a volume's size: staging's "1 Gi" volumes can grow until minisrv01's disk is full, which would hurt production on the same disk. The quota counts requested sizes, not use. Mitigations, in order of effort (proposed, not done): watch the node's filesystem (node-exporter's `node_filesystem_avail_bytes` alert, once Alertmanager has a receiver); put staging's volumes on a separate disk or partition with its own local-path `StorageClass` (a `nodePathMap` entry for another path); or move staging to pisrv01 once it has its SSD.
 
 ## Cost
 
@@ -114,15 +116,17 @@ Cloudflare's dashboard paths as of November 2026 (Zero Trust at one.dash.cloudfl
 
 10. **Check the gate** from a private window: `https://crypto-tax-staging.jarrodturpin.dev` shows Cloudflare's sign-in, an invited email gets a PIN, any other doesn't; after sign-in every page has the red STAGING banner. `curl -s -o /dev/null -w '%{http_code}\n' https://crypto-tax-staging.jarrodturpin.dev/` gives 302.
 
+11. **PR label** for production changes beyond the image (the app's rollback PRs carry it; the isolation check allows a production render change only with it): `gh label create production-change --repo turpinator-x/homelab --color B60205 --description "Changes production beyond its image: owner-approved"`.
+
 **Inviting a client tester later:** add the email to the `BlockOne staging testers` group *and* to `BLOCKONE_WEB_ALLOWED_EMAILS` (`sops apps/staging/blockone-crypto-tax-staging/blockone-app-secret.yaml`, then a PR; staging only). Removing one: the reverse. Rotating the service token: Refresh it in Cloudflare (same Client ID) or make a new one and change both the Secret and `~/.config/blockone/staging-smoke.env`.
 
 ## Verified, and not
 
-Verified on 2026-11-12: `./scripts/validate.sh` (kubeconform strict on the staging build, 20 objects); the isolation check, including its failure path; the rendered overlay (namespace renamed, backups removed, settings merged, sizes and volume class patched, the generated ConfigMap name reaching the reset CronJob); the two generated Secrets encrypt to the repo's age recipient. The app side (staging mode, service tokens, demo seed and reset, the smoke suite against a local API + worker on PostgreSQL 18) is tested in the app repo.
+Verified on 2026-11-12: `./scripts/validate.sh` (kubeconform strict on the staging build, 20 objects); the isolation check, including each failure path; the rendered overlay (namespace renamed, backups removed, settings merged, sizes and volume class patched, the generated ConfigMap name reaching the reset CronJob); the two generated Secrets encrypt to the repo's age recipient. The app side (staging mode, service tokens, demo seed and reset, the smoke suite against a local API + worker on PostgreSQL 18) is tested in the app repo.
 
 Not verified: anything on the cluster or in Cloudflare (nothing was applied; the owner steps aren't done), the smoke suite through a real Access service token, and the demo reset Job in the cluster.
 
 ## Open items
 
-- A `PriorityClass` below production's for staging's pods, so the scheduler evicts staging first if minisrv01 ever runs short. Needs a cluster-scoped object; not added without approval.
+- Staging's disk use isn't capped (above, "Disk").
 - Staging tracks only what `stage.sh` deploys; a Renovate PR to the base (e.g. PostgreSQL) changes production and staging together, as before.
