@@ -1,0 +1,423 @@
+# Nightly encrypted backups of PostgreSQL and the case files (docs/blockone-crypto-tax.md, "Backups and restore").
+#
+#   03:30 blockone-backup (minisrv01): pg_dump + a tar of blockone-data, encrypted by rclone's crypt remote and
+#         uploaded to a Cloudflare R2 bucket under YYYY/MM/DD (UTC), then anything older than 35 days is deleted.
+#   04:30 blockone-backup-mirror (pisrv01): copies the still-encrypted R2 objects onto pisrv01's own volume, keeps
+#         35 days there, and proves last night's backup decrypts and reads (pg_restore --list, tar -t).
+#
+# rclone is configured by environment variables only (RCLONE_CONFIG_<REMOTE>_<OPTION>), no config file. The
+# R2 keys and the crypt passwords come from the SOPS Secrets blockone-backup and blockone-backup-mirror (overlay).
+# Losing the crypt passwords makes every backup unreadable: they are kept in the password manager too.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: blockone-backup
+  labels:
+    app: blockone-backup
+spec:
+  schedule: "30 3 * * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600 # a run missed by more than an hour (node down) waits for the next night
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 2700 # 45 minutes, well before the mirror's run
+      template:
+        metadata:
+          labels:
+            app: blockone-backup # may reach PostgreSQL (networkpolicy.yaml)
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: minisrv01 # blockone-data is a node-local volume
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001 # the app's uid, so the tar can read every case file
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # 1. Dump the database in PostgreSQL's custom format (compressed; pg_restore can pick tables from it).
+            #    The .partial name means a dump that died halfway is never uploaded.
+            - name: dump
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  date -u +%Y/%m/%d > /work/day
+                  echo "$stamp" > /work/stamp
+                  pg_dump -h blockone-postgres -U blockone -d blockone -Fc -f "/work/blockone-db-$stamp.dump.partial"
+                  pg_restore --list "/work/blockone-db-$stamp.dump.partial" > /dev/null # readable before it's kept
+                  mv "/work/blockone-db-$stamp.dump.partial" "/work/blockone-db-$stamp.dump"
+                  ls -l /work
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-db
+                      key: password
+                - name: PGCONNECT_TIMEOUT
+                  value: "10"
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+            # 2. Tar the whole case-files volume, read-only. Nothing is left out: the per-case caches feed the
+            #    "cached answers only" steps, so they are part of a reproducible result (only the copies a restore
+            #    set aside, .pre-restore-* and .restoring-*, are skipped). GNU tar exits 1 if a file changed
+            #    while it was read (a job writing at 03:30): the run fails and alerts rather than keep a torn copy.
+            - name: archive
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  stamp=$(cat /work/stamp)
+                  tar -C /data --exclude=./lost+found --exclude='./.pre-restore-*' --exclude='./.restoring-*' \
+                    -czf "/work/blockone-data-$stamp.tar.gz.partial" .
+                  tar -tzf "/work/blockone-data-$stamp.tar.gz.partial" > /dev/null
+                  mv "/work/blockone-data-$stamp.tar.gz.partial" "/work/blockone-data-$stamp.tar.gz"
+                  ls -l /work
+              env:
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+          containers:
+            # 3. Encrypt and upload, check the upload against the local files, then apply the 35-day retention.
+            - name: upload
+              image: rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  day=$(cat /work/day)
+                  rclone copy /work "backup:$day" --include '*.dump' --include '*.tar.gz' --stats-one-line -v
+                  rclone cryptcheck /work "backup:$day" --include '*.dump' --include '*.tar.gz' --one-way
+                  rclone delete backup: --min-age 35d -v
+                  rclone lsf -R --files-only backup: | sort | tail -n 4
+              env:
+                - name: R2_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: R2_ENDPOINT
+                - name: R2_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: R2_BUCKET
+                # "r2": the bucket itself (S3 API). Its objects are only ever ciphertext.
+                - name: RCLONE_CONFIG_R2_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_R2_PROVIDER
+                  value: Cloudflare
+                - name: RCLONE_CONFIG_R2_ENDPOINT
+                  value: $(R2_ENDPOINT)
+                - name: RCLONE_CONFIG_R2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: R2_ACCESS_KEY_ID
+                - name: RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: R2_SECRET_ACCESS_KEY
+                - name: RCLONE_CONFIG_R2_NO_CHECK_BUCKET
+                  value: "true" # the token is limited to one bucket and can't list or create buckets
+                # "backup": crypt over r2:<bucket>/blockone. File and folder names and contents are encrypted
+                # (NaCl secretbox: a changed byte fails to decrypt instead of restoring wrong data).
+                - name: RCLONE_CONFIG_BACKUP_TYPE
+                  value: crypt
+                - name: RCLONE_CONFIG_BACKUP_REMOTE
+                  value: r2:$(R2_BUCKET)/blockone
+                - name: RCLONE_CONFIG_BACKUP_FILENAME_ENCRYPTION
+                  value: standard
+                - name: RCLONE_CONFIG_BACKUP_DIRECTORY_NAME_ENCRYPTION
+                  value: "true"
+                - name: RCLONE_CONFIG_BACKUP_PASSWORD # rclone obscure'd, as rclone expects in config
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: RCLONE_CRYPT_PASSWORD
+                - name: RCLONE_CONFIG_BACKUP_PASSWORD2 # the salt; obscure'd too
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup
+                      key: RCLONE_CRYPT_PASSWORD2
+                - name: HOME
+                  value: /tmp
+                - name: XDG_CONFIG_HOME
+                  value: /tmp/.config
+                - name: RCLONE_CACHE_DIR
+                  value: /tmp/.cache
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: blockone-data
+                readOnly: true
+            - name: work
+              emptyDir:
+                sizeLimit: 8Gi # a 2 Gi database and 5 Gi of case files, compressed
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+---
+# The second copy lives on the other node, so one disk (or one node) failing never takes both. It holds the R2
+# objects as they are, still encrypted.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: blockone-backup-mirror
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled # keep the backups if the app is turned off
+spec:
+  storageClassName: local-path-retain
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: blockone-backup-mirror
+  labels:
+    app: blockone-backup-mirror
+spec:
+  schedule: "30 4 * * *" # an hour after blockone-backup
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 2700
+      template:
+        metadata:
+          labels:
+            app: blockone-backup-mirror
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: pisrv01 # the other node: its volume is the second copy
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # 1. Copy, never sync: if the bucket is emptied (a leaked key, a mistake), the deletion must not
+            #    reach this copy. --immutable: backups never change once written, so an object in R2 that no
+            #    longer matches the copy here (tampering, corruption) fails the run instead of overwriting the
+            #    good copy. Retention here is by age on its own. Then decrypt last night's pair into an emptyDir
+            #    through a crypt remote over the local copy, which also proves the local copy decrypts.
+            - name: mirror
+              image: rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  rclone copy "r2:$R2_BUCKET/blockone" /mirror/blockone --immutable --stats-one-line -v
+                  rclone delete /mirror/blockone --min-age 35d -v
+                  rclone rmdirs /mirror/blockone --leave-root
+                  dump=$(rclone lsf -R --files-only --max-age 30h --include '*.dump' local: | sort | tail -n 1)
+                  if [ -z "$dump" ]; then
+                    echo "FAIL: no database dump newer than 30 hours in the mirror" >&2
+                    exit 1
+                  fi
+                  data="$(dirname "$dump")/$(basename "$dump" .dump | sed 's/^blockone-db-/blockone-data-/').tar.gz"
+                  echo "verifying $dump and $data"
+                  rclone copyto "local:$dump" /verify/blockone-db.dump
+                  rclone copyto "local:$data" /verify/blockone-data.tar.gz
+                  echo "$dump" > /verify/name
+              env:
+                - name: R2_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: R2_ENDPOINT
+                - name: R2_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: R2_BUCKET
+                - name: RCLONE_CONFIG_R2_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_R2_PROVIDER
+                  value: Cloudflare
+                - name: RCLONE_CONFIG_R2_ENDPOINT
+                  value: $(R2_ENDPOINT)
+                - name: RCLONE_CONFIG_R2_ACCESS_KEY_ID # a read-only token: this pod can't change the bucket
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: R2_ACCESS_KEY_ID
+                - name: RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: R2_SECRET_ACCESS_KEY
+                - name: RCLONE_CONFIG_R2_NO_CHECK_BUCKET
+                  value: "true"
+                # "local": crypt over the local copy, same passwords as the upload's
+                - name: RCLONE_CONFIG_LOCAL_TYPE
+                  value: crypt
+                - name: RCLONE_CONFIG_LOCAL_REMOTE
+                  value: /mirror/blockone
+                - name: RCLONE_CONFIG_LOCAL_FILENAME_ENCRYPTION
+                  value: standard
+                - name: RCLONE_CONFIG_LOCAL_DIRECTORY_NAME_ENCRYPTION
+                  value: "true"
+                - name: RCLONE_CONFIG_LOCAL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: RCLONE_CRYPT_PASSWORD
+                - name: RCLONE_CONFIG_LOCAL_PASSWORD2
+                  valueFrom:
+                    secretKeyRef:
+                      name: blockone-backup-mirror
+                      key: RCLONE_CRYPT_PASSWORD2
+                - name: HOME
+                  value: /tmp
+                - name: XDG_CONFIG_HOME
+                  value: /tmp/.config
+                - name: RCLONE_CACHE_DIR
+                  value: /tmp/.cache
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: mirror
+                  mountPath: /mirror
+                - name: verify
+                  mountPath: /verify
+                - name: tmp
+                  mountPath: /tmp
+          containers:
+            # 2. Prove the decrypted files are a usable dump and a readable archive. An application database
+            #    always has tables (alembic_version at least), so a dump without any table data fails too.
+            - name: verify
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  echo "checking $(cat /verify/name)"
+                  pg_restore --list /verify/blockone-db.dump > /tmp/list
+                  if ! grep -q ' TABLE DATA ' /tmp/list; then
+                    echo "FAIL: the dump has no table data" >&2
+                    exit 1
+                  fi
+                  tables=$(grep -c ' TABLE DATA ' /tmp/list)
+                  tar -tzf /verify/blockone-data.tar.gz > /tmp/files
+                  files=$(wc -l < /tmp/files)
+                  echo "OK: database dump lists $tables tables with data; case-files archive lists $files entries"
+              env:
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: verify
+                  mountPath: /verify
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: mirror
+              persistentVolumeClaim:
+                claimName: blockone-backup-mirror
+            - name: verify
+              emptyDir:
+                sizeLimit: 8Gi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

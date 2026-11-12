@@ -1,0 +1,44 @@
+# Alerts for the nightly backups (backup.yaml), from kube-state-metrics' CronJob and Job metrics. The label is
+# what this Prometheus's ruleSelector matches.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blockone-backup
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blockone-backup
+      rules:
+        - alert: BlockOneBackupStale
+          # Nightly jobs: more than 26 hours since the last success means last night's run didn't succeed
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace="blockone-crypto-tax", cronjob=~"blockone-backup|blockone-backup-mirror"} > 26 * 3600
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.cronjob }} has not succeeded for more than 26 hours"
+            runbook: docs/blockone-crypto-tax.md (Backups and restore)
+        - alert: BlockOneBackupNeverSucceeded
+          # The metric above only exists after a first success; this covers a CronJob that has never had one
+          expr: |
+            (time() - kube_cronjob_created{namespace="blockone-crypto-tax", cronjob=~"blockone-backup|blockone-backup-mirror"} > 26 * 3600)
+            unless on (namespace, cronjob) kube_cronjob_status_last_successful_time
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.cronjob }} has existed for 26 hours without one successful run"
+            runbook: docs/blockone-crypto-tax.md (Backups and restore)
+        - alert: BlockOneBackupJobFailed
+          # A run that failed (after its one retry), shown for a day so a later success doesn't hide it at once
+          expr: |
+            kube_job_failed{namespace="blockone-crypto-tax", job_name=~"blockone-backup-.+", condition="true"} == 1
+            and on (namespace, job_name) (time() - kube_job_created < 24 * 3600)
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backup job {{ $labels.job_name }} failed"
+            description: "kubectl --context homelab -n blockone-crypto-tax logs job/{{ $labels.job_name }} --all-containers"
+            runbook: docs/blockone-crypto-tax.md (Backups and restore)

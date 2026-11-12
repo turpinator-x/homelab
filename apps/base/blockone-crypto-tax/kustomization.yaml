@@ -7,6 +7,8 @@ resources:
   - api.yaml
   - worker.yaml
   - networkpolicy.yaml
+  - backup.yaml
+  - backup-alerts.yaml
 configMapGenerator:
   # Settings that aren't secret (src/nftcb/web/settings.py in the app repo). Secrets come from the staging overlay.
   - name: blockone-settings

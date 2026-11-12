@@ -1,6 +1,6 @@
 # The app's own PostgreSQL: the cluster has no shared database or operator yet, and one small instance is
 # enough for a tester app. Only the API and the worker can reach it (networkpolicy.yaml).
-# Backups are not set up yet: see docs/blockone-crypto-tax.md.
+# Backed up nightly (pg_dump, encrypted, to R2 and pisrv01): backup.yaml.
 apiVersion: v1
 kind: Service
 metadata:

@@ -10,6 +10,20 @@ resources:
   - blockone-app-secret.yaml
   - blockone-explorer-keys-secret.yaml
   - ghcr-pull-secret.yaml
+  # Nightly backups' R2 keys and crypt passwords: uncomment once the files exist (docs/blockone-crypto-tax.md,
+  # "Backups and restore"). Until then the backup pods wait in CreateContainerConfigError and the alerts fire.
+  - blockone-backup-secret.yaml
+  - blockone-backup-mirror-secret.yaml
+  # RESTORE ONLY (docs/blockone-crypto-tax.md, "Backups and restore"): uncomment with the patch below, then
+  # comment both out again once the restore is checked.
+  # - restore.yaml
+# patches:
+#   # Stops the API and worker while a restore runs, so nothing writes to the database or case files
+#   - target: {kind: Deployment, name: "blockone-(api|worker)"}
+#     patch: |-
+#       - op: replace
+#         path: /spec/replicas
+#         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
   # Built from the app repo's main ac365b4 (2026-11-12): friendlier pages, wallet grid, Koinly suggestions.
