@@ -131,11 +131,105 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # The API and the worker, nothing else
+    # The API and the worker, and the nightly backup's pg_dump; nothing else
     - from:
         - podSelector:
             matchLabels:
               blockone-db-client: "true"
       ports:
         - port: postgres
+    - from:
+        - podSelector:
+            matchLabels:
+              app: blockone-backup
+      ports:
+        - port: postgres
   egress: [] # PostgreSQL never connects out
+---
+# The nightly backup (backup.yaml): PostgreSQL for pg_dump, and HTTPS out to R2 (<account>.r2.cloudflarestorage.com)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-backup
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-backup
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: blockone-postgres
+      ports:
+        - port: 5432
+          protocol: TCP
+    # HTTPS to public addresses only (R2)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+# The backup mirror on pisrv01: reads R2 over HTTPS, nothing else
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-backup-mirror
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-backup-mirror
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTPS to public addresses only (R2)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
