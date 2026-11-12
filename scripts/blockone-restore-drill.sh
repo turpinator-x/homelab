@@ -8,11 +8,14 @@
 #  2. create a throwaway namespace blockone-drill-<time>: restricted Pod Security, default-deny NetworkPolicy, the
 #     drill pod may only reach DNS and HTTPS on public addresses (R2). No Service, no ingress, no tunnel;
 #  3. copy in only the mirror's read-only R2 token Secret (blockone-backup-mirror; never printed);
-#  4. one Job pod: fetch + decrypt the backup, restore it into a PostgreSQL that lives only in the pod, unpack the
-#     case files, and print each table's row count and every file's SHA-256. Its volumes are memory-backed
-#     (tmpfs): the decrypted client data never touches a disk, and it's gone when the pod is;
-#  5. compare those with production's own (read-only: a SELECT on its PostgreSQL, sha256 of its case files);
-#  6. delete the namespace, whatever happened (trap), and check it's gone.
+#  4. one Job pod on pisrv01 (not the node holding production's volumes, so a drill can't starve production's
+#     disk or memory): fetch + decrypt the backup, restore it into a PostgreSQL that lives only in the pod, unpack
+#     the case files, and print each table's row count and every file's SHA-256. Its volumes are memory-backed
+#     (tmpfs, requests close to limits so the scheduler reserves the memory): the decrypted client data never
+#     touches a disk, and it's gone when the pod is;
+#  5. compare those with production's own, read-only (a SELECT in a read-only session on its PostgreSQL, sha256
+#     of its case files);
+#  6. delete the namespace, whatever happened (trap), and check it's gone; a namespace left behind fails the run.
 # Exit 0: the backup restored and matched. Exit 1: it didn't (or production changed since the backup: --fresh).
 #
 # This creates and deletes cluster objects directly (a namespace and what's in it): an exception to "change Git,
@@ -20,6 +23,7 @@
 # suggested rhythm; restore-drill-cronjob.yaml in the production overlay is a proposed in-cluster schedule (not
 # enabled).
 set -euo pipefail
+shopt -s inherit_errexit
 
 CTX=${BLOCKONE_KUBE_CONTEXT:-homelab}
 PROD_NS=blockone-crypto-tax
@@ -65,13 +69,20 @@ fi
 
 ns="blockone-drill-$(date -u +%Y%m%d-%H%M%S)"
 cleanup() {
+  local rc=$? left
   echo "== deleting namespace $ns"
-  kc delete namespace "$ns" --wait=true --timeout=180s > /dev/null || echo "WARNING: namespace $ns wasn't deleted: delete it by hand" >&2
-  if kc get namespace "$ns" > /dev/null 2>&1; then
-    echo "WARNING: namespace $ns still exists" >&2
+  kc delete namespace "$ns" --ignore-not-found --wait=true --timeout=180s > /dev/null \
+    || echo "FAIL: deleting namespace $ns failed" >&2
+  if ! left=$(kc get namespace "$ns" --ignore-not-found -o name); then
+    echo "FAIL: can't check namespace $ns (cluster access?): delete it by hand" >&2
+    rc=1
+  elif [ -n "$left" ]; then
+    echo "FAIL: namespace $ns still exists (it holds a copy of the read-only backup token): delete it by hand" >&2
+    rc=1
   else
     echo "namespace $ns is gone"
   fi
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -152,7 +163,7 @@ spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
       nodeSelector:
-        kubernetes.io/hostname: minisrv01 # the node that already holds this data in production
+        kubernetes.io/hostname: pisrv01 # not the node with production's volumes: a drill can't starve production
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
@@ -203,7 +214,7 @@ spec:
             - {name: XDG_CONFIG_HOME, value: /tmp/.config}
             - {name: RCLONE_CACHE_DIR, value: /tmp/.cache}
           resources:
-            requests: {cpu: 20m, memory: 64Mi}
+            requests: {cpu: 50m, memory: 640Mi}
             limits: {memory: 768Mi}
           securityContext: &sc
             allowPrivilegeEscalation: false
@@ -226,7 +237,7 @@ spec:
             periodSeconds: 3
             failureThreshold: 60
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 100m, memory: 1280Mi}
             limits: {memory: 1536Mi}
           securityContext: *sc
           volumeMounts:
@@ -256,7 +267,7 @@ spec:
                 where table_schema = 'public' and table_type = 'BASE TABLE' order by 1
             - {name: HOME, value: /tmp}
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 100m, memory: 2304Mi}
             limits: {memory: 2560Mi}
           securityContext: *sc
           volumeMounts:
@@ -281,7 +292,9 @@ echo "== production, read-only"
 rows_sql="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', \
 table_schema, table_name), false, true, '')))[1]::text from information_schema.tables \
 where table_schema = 'public' and table_type = 'BASE TABLE' order by 1"
-prod_rows=$(kc -n "$PROD_NS" exec blockone-postgres-0 -c postgres -- psql -U blockone -d blockone -At -F ' ' -c "$rows_sql")
+# a read-only session: the server refuses any write in it (a dedicated read-only role is proposed in the docs)
+prod_rows=$(kc -n "$PROD_NS" exec blockone-postgres-0 -c postgres -- env PGOPTIONS='-c default_transaction_read_only=on' \
+  psql -U blockone -d blockone -At -F ' ' -v ON_ERROR_STOP=1 -c "$rows_sql")
 prod_files=$(kc -n "$PROD_NS" exec deploy/blockone-worker -c worker -- python -c '
 import hashlib, os
 out = []

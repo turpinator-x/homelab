@@ -3,12 +3,18 @@
 #
 # The same drill as scripts/blockone-restore-drill.sh, without a throwaway namespace (a CronJob would need a
 # ServiceAccount allowed to create namespaces and Secrets, more power than a drill should hold): one pod in this
-# namespace, no ingress, nothing listening but a PostgreSQL bound to 127.0.0.1 inside the pod. It fetches the
-# newest backup with the mirror's read-only token, restores it into that pod-local PostgreSQL, unpacks the case
-# files, and compares every table's row count with production's (a SELECT over the network, as the nightly
-# pg_dump does) and every file's SHA-256 with production's volume (mounted read-only). All its volumes are
-# memory-backed: the decrypted data never touches a disk and is gone with the pod.
-# Its Jobs are named blockone-backup-drill-*, so the existing BlockOneBackupJobFailed alert reports a failed drill.
+# namespace, no ingress, nothing listening but a PostgreSQL bound to 127.0.0.1 inside the pod, with its own label
+# and NetworkPolicies (below). It fetches the newest backup with the mirror's read-only token, restores it into
+# that pod-local PostgreSQL, unpacks the case files, and compares every table's row count with production's (a
+# SELECT in a read-only session over the network) and every file's SHA-256 with production's volume (mounted
+# read-only). All its volumes are memory-backed: the decrypted data never touches a disk and is gone with the pod.
+# It has to run on minisrv01 (it mounts production's node-local volume), unlike the script, which runs on pisrv01;
+# its memory requests are close to its limits so the scheduler reserves what it uses.
+# Before enabling: give it a read-only database role instead of the owner's password (owner step, once:
+#   CREATE ROLE blockone_drill LOGIN PASSWORD '<random>'; GRANT pg_read_all_data TO blockone_drill;
+# in a SOPS Secret blockone-drill-db), and point PGUSER/PGPASSWORD below at it.
+# Its Jobs are named blockone-backup-drill-*, so the existing BlockOneBackupJobFailed alert reports a failed drill
+# (once Alertmanager has a receiver: see the docs).
 # 03:50 on the 1st, twenty minutes after that night's backup, so production has rarely changed since; a mismatch
 # from a late-night edit shows as a failed drill: rerun scripts/blockone-restore-drill.sh --fresh to confirm.
 apiVersion: batch/v1
@@ -31,7 +37,7 @@ spec:
       template:
         metadata:
           labels:
-            app: blockone-backup # the backup's NetworkPolicy: PostgreSQL, DNS and HTTPS to public addresses (R2)
+            app: blockone-backup-drill # its own NetworkPolicies, below
         spec:
           restartPolicy: Never
           automountServiceAccountToken: false
@@ -83,7 +89,7 @@ spec:
                 - {name: XDG_CONFIG_HOME, value: /tmp/.config}
                 - {name: RCLONE_CACHE_DIR, value: /tmp/.cache}
               resources:
-                requests: {cpu: 20m, memory: 64Mi}
+                requests: {cpu: 50m, memory: 640Mi}
                 limits: {memory: 768Mi}
               securityContext:
                 allowPrivilegeEscalation: false
@@ -106,7 +112,7 @@ spec:
                 periodSeconds: 3
                 failureThreshold: 60
               resources:
-                requests: {cpu: 50m, memory: 128Mi}
+                requests: {cpu: 100m, memory: 1280Mi}
                 limits: {memory: 1536Mi}
               securityContext:
                 allowPrivilegeEscalation: false
@@ -123,8 +129,8 @@ spec:
               args:
                 - |
                   set -euo pipefail
-                  pg_restore -h 127.0.0.1 -U drill -d drill --no-owner --single-transaction --exit-on-error /work/db.dump
-                  PGPASSWORD="" psql -h 127.0.0.1 -U drill -d drill -At -F ' ' -c "$ROWS_SQL" > /tmp/rows.backup
+                  PGOPTIONS="" pg_restore -h 127.0.0.1 -U drill -d drill --no-owner --single-transaction --exit-on-error /work/db.dump
+                  PGPASSWORD="" PGOPTIONS="" psql -h 127.0.0.1 -U drill -d drill -At -F ' ' -c "$ROWS_SQL" > /tmp/rows.backup
                   for i in $(seq 1 60); do pg_isready -q -h blockone-postgres -U blockone -d blockone && break; sleep 2; done
                   psql -h blockone-postgres -U blockone -d blockone -At -F ' ' -c "$ROWS_SQL" > /tmp/rows.live
                   mkdir /restore/files
@@ -146,12 +152,13 @@ spec:
                     select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I',
                     table_schema, table_name), false, true, '')))[1]::text from information_schema.tables
                     where table_schema = 'public' and table_type = 'BASE TABLE' order by 1
-                - name: PGPASSWORD # production's, for the read-only row counts (as the nightly pg_dump uses)
+                - name: PGPASSWORD # production's, for now: switch to the blockone_drill role before enabling
                   valueFrom: {secretKeyRef: {name: blockone-db, key: password}}
+                - {name: PGOPTIONS, value: "-c default_transaction_read_only=on"} # the server refuses writes
                 - {name: PGCONNECT_TIMEOUT, value: "10"}
                 - {name: HOME, value: /tmp}
               resources:
-                requests: {cpu: 50m, memory: 128Mi}
+                requests: {cpu: 100m, memory: 2304Mi}
                 limits: {memory: 2560Mi}
               securityContext:
                 allowPrivilegeEscalation: false
@@ -173,3 +180,56 @@ spec:
             - {name: pgdata, emptyDir: {medium: Memory, sizeLimit: 1Gi}}
             - {name: pgrun, emptyDir: {medium: Memory, sizeLimit: 16Mi}}
             - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 64Mi}}
+---
+# The drill pod reaches DNS, production's PostgreSQL and HTTPS on public addresses (R2); nothing reaches it
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-backup-drill
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-backup-drill
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: blockone-postgres
+      ports:
+        - {port: 5432, protocol: TCP}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - {port: 443, protocol: TCP}
+---
+# PostgreSQL accepts the drill pod too (NetworkPolicies add up: the base's blockone-postgres policy is unchanged)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-postgres-from-drill
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: blockone-backup-drill
+      ports:
+        - {port: 5432, protocol: TCP}
