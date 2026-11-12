@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 238dc49: feat(web): wallet kinds and the FlareBank opening-lot step
+  # Built from the app repo's main a5e2b81: feat: price provenance, corrections log and audit trail
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-238dc491b88f2496712149926394e34b7291193b
-    digest: sha256:42b59597021d28267e349358fdb69f2381229b41de9bc7675173fff272c6f9fd
+    newTag: sha-a5e2b81819cc30efc84a05b35bb8838db26648b0
+    digest: sha256:80f598951aa0418c16c5231b0b565195072cb683e159150f565cf889a878c86a
