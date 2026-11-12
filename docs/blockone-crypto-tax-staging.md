@@ -41,7 +41,15 @@ flowchart LR
 ## How staging is kept away from production
 
 - **Namespace.** Every object is in `blockone-staging`: the overlay's `namespace:` field, and Flux's `targetNamespace` as a second guard.
-- **CI check.** `scripts/check-staging-isolation.sh` (run by `validate.sh`, so in CI too, with the full history checked out) fails if: the staging build fails; any staging object is cluster-scoped or outside `blockone-staging`; the text `blockone-crypto-tax` appears anywhere in the staging render except the image name; the staging Flux Kustomization's name, path, `targetNamespace` or `prune` change; or **production's full render** (base included) differs from `origin/main`'s beyond app image lines. Image-only changes (promotions, Renovate pins) pass and are listed; any other production change needs the PR label **`production-change`** (CI then sets `BLOCKONE_ALLOW_PROD_CHANGE=1`), which the app repo's rollback PRs carry and only maintainers can set. A missing `origin/main` fails the check. Tested 2026-11-12: each of those failures, and an image-only change passing.
+- **CI check.** `scripts/check-staging-isolation.sh` (run by `validate.sh`, so in CI too, with the full history checked out) fails if:
+  - the staging build fails, or any staging object is cluster-scoped or outside `blockone-staging`;
+  - the text `blockone-crypto-tax` appears anywhere in the staging render except the app image (`ghcr.io/turpinator-x/blockone-crypto-tax` followed by `:` or `@`);
+  - a staging NetworkPolicy selects namespaces other than by one exact name (an empty `namespaceSelector`, any `matchExpressions` such as `NotIn`, or production's name);
+  - either Flux Kustomization changes: staging's name, path, `targetNamespace` and `prune`, and **production's** name, path, `prune` and the absence of a `targetNamespace`;
+  - **without the PR label `production-change`:** production's full render (base included) differs from `origin/main`'s beyond the app image, or production's Flux Kustomization file or anything under `infrastructure/configs` (cluster-wide objects) differs at all.
+
+  App-image-only changes (promotions) pass and are listed. The workflow reads the PR's labels when the check runs (`gh api .../pulls/<n>`), not from the event, and runs again on `labeled`, so a label added just after the PR opens is seen. A missing `origin/main` fails the check. Tested 2026-11-12: each failure above, and an app-image-only change passing.
+  - **Renovate:** PRs that bump a pinned image in `apps/base/blockone-crypto-tax` (PostgreSQL, rclone) or `cloudflared` now change production's render beyond the app image, so they fail this check until labelled. That's deliberate: those images run next to client data. Proposal (not applied; it's `renovate.json`): a `packageRules` entry for `matchFileNames: ["apps/base/blockone-crypto-tax/**", "apps/staging/blockone-crypto-tax/**"]` with `addLabels: ["production-change"]` and `automerge: false`, so such PRs arrive labelled and wait for the weekly review (`homelab-pr-review`) instead of failing.
 - **Flux.** Its own Kustomization. Pruning can only delete what this Kustomization applied, which is only staging. Production's Kustomization, path and objects are untouched, so its `prune: true` has nothing new to act on.
 - **Network.** Each namespace has default-deny NetworkPolicies, and the allow rules select pods by label within their own namespace. A staging pod can't reach production's PostgreSQL or API (and the other way round).
 - **Data and secrets.** Its own PostgreSQL, password, tax id key and volume: no production value is copied. The demo data is synthetic (made-up exchange and wallet names, no addresses, no tax ids). The demo reset refuses unless the app is in staging mode and the data volume carries staging's marker file (or is empty), so even pointed at production it would delete nothing.
@@ -117,6 +125,18 @@ Cloudflare's dashboard paths as of November 2026 (Zero Trust at one.dash.cloudfl
 10. **Check the gate** from a private window: `https://crypto-tax-staging.jarrodturpin.dev` shows Cloudflare's sign-in, an invited email gets a PIN, any other doesn't; after sign-in every page has the red STAGING banner. `curl -s -o /dev/null -w '%{http_code}\n' https://crypto-tax-staging.jarrodturpin.dev/` gives 302.
 
 11. **PR label** for production changes beyond the image (the app's rollback PRs carry it; the isolation check allows a production render change only with it): `gh label create production-change --repo turpinator-x/homelab --color B60205 --description "Changes production beyond its image: owner-approved"`.
+
+12. **Mark the staging database, once** (after the first `stage.sh` has deployed an image with staging mode; until then staging gives no demo taxpayers, and the automatic reset refuses an unmarked database). This writes staging's marker on the empty database; the reset after each deploy never does:
+
+    ```bash
+    kubectl --context homelab -n blockone-staging create job --from=cronjob/blockone-demo-reset demo-init \
+      --dry-run=client -o json \
+      | python3 -c 'import json,sys; j=json.load(sys.stdin); j["spec"]["template"]["spec"]["containers"][0]["args"].append("--init-staging"); print(json.dumps(j))' \
+      | kubectl --context homelab apply -f -
+    kubectl --context homelab -n blockone-staging logs -f job/demo-init      # "staging reset: removed 0 accounts ..."
+    ```
+
+    It refuses if the database has any taxpayer. A one-off Job applied directly, like the backups' first run.
 
 **Inviting a client tester later:** add the email to the `BlockOne staging testers` group *and* to `BLOCKONE_WEB_ALLOWED_EMAILS` (`sops apps/staging/blockone-crypto-tax-staging/blockone-app-secret.yaml`, then a PR; staging only). Removing one: the reverse. Rotating the service token: Refresh it in Cloudflare (same Client ID) or make a new one and change both the Secret and `~/.config/blockone/staging-smoke.env`.
 
