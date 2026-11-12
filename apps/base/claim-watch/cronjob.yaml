@@ -1,0 +1,69 @@
+# Read-only reminder job for DeFi claims and Flare staking (app repo: turpinator-x/defi-claim-watch, private).
+# Every 15 minutes it reads public contract state from the Flare RPC and sends new events to Telegram.
+# It holds no wallet key and cannot sign: claims stay manual in MetaMask (docs/claim-watch.md).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: claim-watch
+  labels:
+    app: claim-watch
+spec:
+  schedule: "*/15 * * * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # the next run is 15 minutes away; the job alerts on repeated failures itself
+      activeDeadlineSeconds: 600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: claim-watch
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          imagePullSecrets:
+            - name: ghcr-pull
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: claim-watch
+              image: ghcr.io/turpinator-x/defi-claim-watch:0.1.0@sha256:671ae27878ae655368079345bf3c5ed2fc7d94bc878d38af3ea20bd8b900e286
+              env:
+                - name: STATE_PATH
+                  value: /state/state.json
+                - name: GULLY_THRESHOLD
+                  value: "1000000"
+                - name: REBORN_RECHARGE_TARGET
+                  value: "34"
+              envFrom:
+                - secretRef:
+                    name: claim-watch # WALLET_ADDRESS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (staging overlay)
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: state
+                  mountPath: /state
+          volumes:
+            - name: state
+              persistentVolumeClaim:
+                claimName: claim-watch-state

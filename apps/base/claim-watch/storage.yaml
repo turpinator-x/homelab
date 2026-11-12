@@ -1,0 +1,12 @@
+# Remembers which reminders were already sent, so each one goes out once (docs/claim-watch.md).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-watch-state
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Mi
