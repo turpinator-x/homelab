@@ -38,7 +38,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: claim-watch
-              image: ghcr.io/turpinator-x/defi-claim-watch:0.1.0
+              image: ghcr.io/turpinator-x/defi-claim-watch:0.1.0@sha256:671ae27878ae655368079345bf3c5ed2fc7d94bc878d38af3ea20bd8b900e286
               env:
                 - name: STATE_PATH
                   value: /state/state.json
