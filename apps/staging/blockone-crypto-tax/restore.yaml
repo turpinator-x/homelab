@@ -131,10 +131,14 @@ spec:
               # key on taxpayers made --clean fail and roll back). Any error rolls everything back, DROP included.
               # Same commands as the app repo's tests/unit/web/test_migration_policy.py (RESTORE_STEPS), which
               # restores an N-1 dump over an N schema on PostgreSQL 18 in CI.
+              # The schema is recreated as a new database has it (owner pg_database_owner, USAGE for PUBLIC). The
+              # plaintext SQL file is removed however this step ends.
+              trap 'rm -f /work/blockone-db.sql' EXIT
               pg_restore --no-owner -f /work/blockone-db.sql /work/blockone-db.dump
-              { printf 'DROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n'; cat /work/blockone-db.sql; } \
+              { printf '%s\n' 'DROP SCHEMA public CASCADE;' 'CREATE SCHEMA public;' \
+                  'ALTER SCHEMA public OWNER TO pg_database_owner;' 'GRANT USAGE ON SCHEMA public TO PUBLIC;'
+                cat /work/blockone-db.sql; } \
                 | psql -h blockone-postgres -U blockone -d blockone -v ON_ERROR_STOP=1 --single-transaction -q
-              rm -f /work/blockone-db.sql
               echo "database restored"
           env:
             - name: PGPASSWORD
