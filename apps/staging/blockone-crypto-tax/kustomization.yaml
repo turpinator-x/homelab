@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 160870b: feat(web): left sidebar layout and self-hosted fonts (Inter default)
+  # Built from the app repo's main 2d43e03: feat(web): per-taxpayer Settings with year ranges and locked years
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-160870bdcd82ecf54364aec224c44cbb6e46270a
-    digest: sha256:1bbc71f4d5cc1852a828eb9d90f691b927ce0681ce7c062291d1256c2737261e
+    newTag: sha-2d43e03a2813b8a804057c7acf592df007cb0686
+    digest: sha256:8006fcb47e5e354efd8eb883072f2a9c7ba46ba2ab095a282854b2ea97375635
