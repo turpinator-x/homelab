@@ -12,8 +12,8 @@ resources:
   - ghcr-pull-secret.yaml
   # Nightly backups' R2 keys and crypt passwords: uncomment once the files exist (docs/blockone-crypto-tax.md,
   # "Backups and restore"). Until then the backup pods wait in CreateContainerConfigError and the alerts fire.
-  # - blockone-backup-secret.yaml
-  # - blockone-backup-mirror-secret.yaml
+  - blockone-backup-secret.yaml
+  - blockone-backup-mirror-secret.yaml
   # RESTORE ONLY (docs/blockone-crypto-tax.md, "Backups and restore"): uncomment with the patch below, then
   # comment both out again once the restore is checked.
   # - restore.yaml
