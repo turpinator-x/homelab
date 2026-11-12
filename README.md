@@ -20,7 +20,7 @@ I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise I
 | LAN apps | [Homepage](https://gethomepage.dev) start page with Ingress auto-discovery and read-only RBAC; Traefik Ingress for LAN hostnames |
 | Secrets | SOPS and age, decrypted by Flux; a pre-commit hook blocks commits with an unencrypted Secret or a leaked credential |
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) as a Flux HelmRelease from an OCI registry |
-| Updates | Self-hosted Renovate runs hourly on a GitHub App and covers 14 repos; low-risk updates merge on their own, usually after a 3-day wait, and majors wait for a Monday review |
+| Updates | Self-hosted Renovate runs hourly on a GitHub App and covers 15 repos; low-risk updates merge on their own, usually after a 3-day wait, and majors wait for a Monday review |
 | CI | GitHub Actions: kubeconform on every Flux path (strict schemas, SHA-pinned actions) and a full-history gitleaks scan. These report problems; they are not required checks |
 | Workload security | App containers run as non-root; the public dashboard pod has no API token, a restricted-level security context and a NetworkPolicy; `main` is protected from force pushes and deletion |
 

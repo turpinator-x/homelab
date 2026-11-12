@@ -51,6 +51,7 @@ spec:
                 - turpinator-x/blockone-devops-ai-journey
                 - turpinator-x/turpinator-x
                 - turpinator-x/domain-sites
+                - turpinator-x/defi-claim-watch
               envFrom:
                 - configMapRef:
                     name: renovate-configmap

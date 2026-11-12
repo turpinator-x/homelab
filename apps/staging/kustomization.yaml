@@ -6,3 +6,4 @@ resources:
   - dashboard
   - homepage
   - llm
+  - claim-watch

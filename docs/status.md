@@ -17,7 +17,8 @@ _Last updated: 2026-11-12_
 | BlockOne Crypto Tax | `apps/*/blockone-crypto-tax` | tester app (API, worker, PostgreSQL) behind its own tunnel and Cloudflare Access; own `blockone-crypto-tax` Kustomization; deployed 2026-11-11 (PR #32). Backups on a branch (Next) |
 | BlockOne staging | `apps/staging/blockone-crypto-tax-staging` | **built, not deployed** (branch `feat/blockone-staging`): own namespace, Kustomization, PostgreSQL, tunnel and Access app, synthetic data only, priority below production (PriorityClass `blockone-staging`); waits for the owner steps in `docs/blockone-crypto-tax-staging.md` |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
-| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 14 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
+| Claim watch | `apps/*/claim-watch` | read-only CronJob every 15 min: Telegram reminders for DeFi claims and Flare restakes, no keys (`docs/claim-watch.md`); image from private `defi-claim-watch` repo |
+| Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 15 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
 | CI | `.github/workflows/validate.yaml` | kubeconform on push/PR; not a required check |
 | Secret scan | `.github/workflows/secret-scan.yaml` | gitleaks over the full history; not a required check |
