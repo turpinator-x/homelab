@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -13,5 +14,11 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # check-staging-isolation.sh compares production's render with origin/main's
+          persist-credentials: false
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
       - run: ./scripts/validate.sh
+        env:
+          # a PR may change production's render (beyond its image) only when a maintainer labelled it
+          BLOCKONE_ALLOW_PROD_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'production-change') && '1' || '' }}
