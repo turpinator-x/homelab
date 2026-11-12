@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 2333677: feat(basis): missing cost basis investigator (CLI, Reports page, worker job)
+  # Built from the app repo's main 5311968: feat(prices): rank price sources and report disagreements per build
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-233367768472e9bb02c778c6f1b7d049f78fedd8
-    digest: sha256:02ee4067e9f579264122d0d8fc6b468d50b12b6c38699c3e9fd87b4f6c2bdf27
+    newTag: sha-5311968edc91318408d73b78fb91eaedabebff52
+    digest: sha256:c5f80fbca757831995cfd2a405a093f08c09ddf0eac789e7a51221adf8c970b2
