@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main ac365b4 (2026-11-12): friendlier pages, wallet grid, Koinly suggestions.
+  # Built from the app repo's main f03e205: feat(web): one drop zone for all files, recognised by content
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-ac365b44fa6cd54809b2570c38567cdf237130b7
-    digest: sha256:dc8c76259d8a108567c823fc3188253740044ce7f2826589ca647f153174d647
+    newTag: sha-f03e2058054622c3fbc692689655c3c32b737b2c
+    digest: sha256:b89f3685a4762285e63a065ee5c5ac25fc7a2330b1ca4541116518dee3c8319f
