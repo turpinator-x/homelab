@@ -221,6 +221,51 @@ Drilled on 2026-11-11 in a throwaway kind cluster (Kubernetes 1.37, three nodes;
 
 The first restore attempt found a bug, fixed before the passing run: tar can't change the mode of the volume's root (owned by root), so unpacking straight into `/data` failed after the files had already been moved aside. The Job now unpacks into a folder first and swaps afterwards.
 
+## Releases: staging, promotion, rollback
+
+Since 2026-11-12 an app change reaches this deployment only through staging (`docs/blockone-crypto-tax-staging.md`) and the owner's approval. The scripts are in the app repo (`scripts/release/`, AI-assisted), the process in its `docs/release_process.md`. What they do here:
+
+- **`stage.sh <app PR>`** changes nothing in this namespace. It reads production's schema revision (a SELECT on `alembic_version`) to report which migrations the change brings.
+- **`promote.sh <sha>`** refuses a commit without a passing `staging/e2e` status, or whose GHCR digest differs from the one that passed. Then, before the image bump: a backup Job from `cronjob/blockone-backup` (`bk-predeploy-<sha>-<time>`), which must finish with `cryptcheck` matching both files, and a mirror Job from `cronjob/blockone-backup-mirror` (`bkv-...`), which must fetch that same backup from R2, decrypt it and read it (tables with data, archive entries). Either failing stops the promotion before anything is deployed. The backup stamp, both digests and both schema revisions go into the promotion record (workstation, `~/.local/state/blockone-release/releases.jsonl`) and into the homelab commit message. Then the usual image-bump PR and the checks (rollout, migrate Completed, schema equal to staging's, no API log errors, 302 from Access).
+- **`rollback.sh app`** takes a fresh verified backup, takes the schema back with the current image's `migrate downgrade` if it moved (`kubectl exec deploy/blockone-worker`; the previous image's migrate step can't start on a revision it doesn't know), then an image-bump PR back to the previous digest, and the checks.
+- **`rollback.sh data`** takes a fresh verified backup, then three PRs through this overlay, as in "Putting a backup back" above: (1) the scale-to-zero patch plus the previous image; (2) `restore.yaml` with `BACKUP` set to the promotion's pre-deploy stamp, under a Job name of its own (`blockone-restore-<stamp>`); (3) unlist the restore and remove the patch, so the previous image starts. It checks the Job's log ("database restored", "case files restored") and the taxpayer count. The owner types the current taxpayer count and the backup stamp first: those are the approval for these non-image PRs. **`rollback.sh undo`** restores the backup the last rollback took, with the image that ran then.
+
+The backup Jobs these create follow the CronJobs' settings and land in the same R2 folders, so the 35-day retention applies to them too. A pre-deploy backup fails (and stops the promotion) if a job writes case files while tar reads them: promote when nothing is running.
+
+### Restore drill
+
+`scripts/blockone-restore-drill.sh [--fresh] [--backup <stamp>]` (AI-assisted) proves a backup restores, away from production and staging:
+
+1. `--fresh` takes a backup first, so the comparison is exact.
+2. A throwaway namespace `blockone-drill-<time>`: restricted Pod Security, default-deny, the drill pod may reach only DNS and HTTPS on public addresses. No Service, no ingress, no tunnel. Only the mirror's read-only Secret is copied in (piped, never printed).
+3. One Job pod on minisrv01: fetch + decrypt (read-only token), restore into a PostgreSQL that lives inside the pod (bound to 127.0.0.1), unpack the case files, print every table's row count and every file's SHA-256. All its volumes are memory-backed (tmpfs): the decrypted data never touches a disk and goes with the pod.
+4. Production's side, read-only: the same row-count query on `blockone-postgres-0`, and SHA-256 of every case file through `kubectl exec deploy/blockone-worker`.
+5. Any difference fails the drill; the namespace is deleted whatever happens (trap), and the script checks it's gone.
+
+It creates and deletes cluster objects directly (a namespace and its contents), an exception to "change Git, not the cluster" like the backups' first run: run it on purpose. **Suggested rhythm: monthly, and after any change to the backup or restore manifests.**
+
+A scheduled version is proposed, **not enabled**: `apps/staging/blockone-crypto-tax/restore-drill.yaml`, a monthly CronJob (03:50 on the 1st, after that night's backup) that runs the same pod in this namespace instead of a throwaway one (a CronJob creating namespaces would need a ServiceAccount allowed to create namespaces and Secrets, more power than a drill should hold). It compares against production's database over the network (the backup's label and password, as `pg_dump` uses) and the case-files volume mounted read-only. Its Jobs are named `blockone-backup-drill-*`, so `BlockOneBackupJobFailed` reports a failed drill. To enable it: add `- restore-drill.yaml` to `kustomization.yaml`, with the owner's approval.
+
+Tested on 2026-11-12 with a stand-in `kubectl` (not on the cluster): the generated manifests pass kubeconform strict; the comparison passes on matching data and fails, listing the table, on a changed row count; the namespace cleanup runs on success and failure. The row-count query was run on PostgreSQL 18. **Not yet run on the homelab.**
+
+### Backup security review (2026-11-12)
+
+| Question | Answer |
+|---|---|
+| Encrypted at rest? | Yes in R2 and on pisrv01: rclone crypt (XSalsa20-Poly1305, names and contents), checked in the drill above (2026-11-11). The plaintext dump and archive exist only in the backup pod's `emptyDir` on minisrv01 while the Job runs (disk-backed; see gaps). The live database and case files sit on minisrv01's local-path volumes: encrypted only if minisrv01's disk is (not checked here) |
+| Off site? | R2 (Cloudflare), plus a second copy on pisrv01 (copy, never sync; `--immutable`) |
+| Retention | 35 days in both places (`rclone delete --min-age 35d`, only after a successful run). Pre-deploy and pre-rollback backups follow the same rule |
+| Who/what can read a backup | Anyone holding both crypt passwords (password manager; the SOPS Secrets). Anyone with the repo's age private key, which decrypts those Secrets (the workstation has it). Anyone who can read Secrets in `blockone-crypto-tax` (cluster admin: the `homelab` kubeconfig). Pods: the backup and mirror Jobs, the restore Job, and (temporarily) the drill pod. R2 tokens and the Cloudflare account, and root on pisrv01, give ciphertext only |
+| Who can delete a backup | The read-and-write R2 token (the nightly job), any Cloudflare account admin, root on pisrv01 for the mirror copy |
+
+Gaps found (none changed here; proposals for the owner):
+
+1. **Plaintext on disk during the backup.** `blockone-backup`'s `work` `emptyDir` is disk-backed, so the unencrypted dump and tar are written to minisrv01's disk while the Job runs, until kubelet cleans up the finished pod's volumes. Proposal: `medium: Memory` with a size limit (the 2026-11-12 pair is 77 MiB) and a matching memory limit on the containers.
+2. **Bucket lock not confirmed.** Owner step 3 above (an R2 bucket lock rule on `blockone/`, 30 days) is optional; without it, the read-and-write token alone can empty the bucket (the pisrv01 copy survives). Proposal: set it and record that it's on.
+3. **One key opens everything.** The age private key decrypts the crypt passwords and both R2 tokens. Proposal: keep the age key and the crypt passwords offline as well (password manager), and consider a second age recipient held offline so a lost workstation isn't a lost key.
+4. **Both off-site copies depend on one provider account for R2**, and the same account runs Access and the tunnels. Proposal (later, with more clients): a second off-site target outside Cloudflare.
+5. **Node disk encryption unknown.** Check whether minisrv01 and pisrv01 use full-disk encryption; if not, the live volumes and staging's data are readable from a stolen disk.
+
 ## Owner checklist
 
 Do these on the branch, in order, then merge. Values below in `<angle brackets>` are yours to fill in; none of them go into Git unencrypted.
@@ -336,7 +381,7 @@ When something's wrong: `kubectl -n blockone-crypto-tax describe pod <pod>` show
 
 ## Open items
 
-- **Backups** are built (branch `feat/blockone-backups`, "Backups and restore"): nightly logical dumps, so up to a day of data can be lost. Point-in-time restore would need WAL archiving (CloudNativePG with object storage, or pgBackRest); revisit with real client data. A first real restore drill on the homelab is still to do once the backups run.
+- **Backups** run nightly ("Backups and restore"): logical dumps, so up to a day of data can be lost (less around a release: `promote.sh` takes one just before). Point-in-time restore would need WAL archiving (CloudNativePG with object storage, or pgBackRest); revisit with more clients. A first restore drill on the homelab (`scripts/blockone-restore-drill.sh --fresh`) is still to do; the gaps in "Backup security review" are open.
 - **Egress by hostname** (egress proxy or Cilium, above).
 - **Image updates.** Renovate's kustomize manager can follow `images:` digests, but a new `sha-<commit>` tag isn't a version it can order. For now the tag and digest are bumped by hand after each app release; tagging the app repo with `v*.*.*` versions would let Renovate open those PRs.
 - **CI minutes.** The image workflow uses GitHub's hosted runner (arm64 under QEMU) on each push to `main`. If minutes run short, add the repo to the self-hosted runners (`docs/github-runners.md`) or build arm64 natively.
