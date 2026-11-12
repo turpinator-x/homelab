@@ -13,5 +13,5 @@ spec:
     persistentvolumeclaims: "3"
     requests.storage: 4Gi
     pods: "12"
-    services.loadbalancer: "0"
+    services.loadbalancers: "0"
     services.nodeports: "0"
