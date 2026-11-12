@@ -107,6 +107,17 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/envFrom/-
         value: {secretRef: {name: blockone-staging-keys}}
+  # Below production in scheduling and eviction (infrastructure/configs/base/scheduling); never preempts
+  - target: {kind: "(Deployment|StatefulSet)"}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/priorityClassName
+        value: blockone-staging
+  - target: {kind: CronJob}
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/priorityClassName
+        value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
   # Built from the app repo's main 238dc49: feat(web): wallet kinds and the FlareBank opening-lot step
