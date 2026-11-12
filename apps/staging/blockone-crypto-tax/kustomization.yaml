@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 17f0839: feat: exchange importers (Kraken PDF, trades CSV, ledgers CSV) wired into the dr
+  # Built from the app repo's main 160870b: feat(web): left sidebar layout and self-hosted fonts (Inter default)
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-17f083951947a741df150016d37548a55e577e53
-    digest: sha256:a975cb537db78998a88a136b9cda434fa01c64c8dc8209cf56ebe78939d315cb
+    newTag: sha-160870bdcd82ecf54364aec224c44cbb6e46270a
+    digest: sha256:1bbc71f4d5cc1852a828eb9d90f691b927ce0681ce7c062291d1256c2737261e
