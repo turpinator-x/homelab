@@ -43,3 +43,4 @@ _Last updated: 2026-11-11_
 - Moving a resource between Flux Kustomizations: `flux suspend` the old one first, or its prune deletes the resource.
 - Deleting a PVC that a CronJob's finished pods mounted: it stays `Terminating` (`pvc-protection`) until those Jobs are deleted.
 - Proton VPN's browser proxy breaks `*.home.arpa` hostnames; test LAN hosts with it off.
+- A new pod's NetworkPolicy allow rules take a few seconds to apply (kube-router): until then connections are refused. Pods that connect at start-up (backup dumps, migrations) must wait and retry, not fail on the first attempt.
