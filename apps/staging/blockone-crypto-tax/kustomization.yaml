@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main cb9f060: fix(prices): drop crossed fills symmetrically and list them
+  # Built from the app repo's main c49dced: fix(engine): take a fee paid in the received asset after the coins arrive
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-cb9f060c93c7b5305ea66cd90ed61a3b0a0e211d
-    digest: sha256:10f062a47d68cc9e4e3e6e405f7635e3d424add6c7c33b66f7580d696bb16768
+    newTag: sha-c49dcedd001fc69fd3cd93cab9af6ab690754670
+    digest: sha256:3444404550c2e9f43bf45b698345997d9dd102fff871600be5a4b14eac710efa
