@@ -1,0 +1,235 @@
+# PROPOSED, NOT ENABLED: a monthly restore drill in the cluster. Not listed in kustomization.yaml; add
+# "- restore-drill.yaml" there only with the owner's approval (docs/blockone-crypto-tax.md, "Restore drill").
+#
+# The same drill as scripts/blockone-restore-drill.sh, without a throwaway namespace (a CronJob would need a
+# ServiceAccount allowed to create namespaces and Secrets, more power than a drill should hold): one pod in this
+# namespace, no ingress, nothing listening but a PostgreSQL bound to 127.0.0.1 inside the pod, with its own label
+# and NetworkPolicies (below). It fetches the newest backup with the mirror's read-only token, restores it into
+# that pod-local PostgreSQL, unpacks the case files, and compares every table's row count with production's (a
+# SELECT in a read-only session over the network) and every file's SHA-256 with production's volume (mounted
+# read-only). All its volumes are memory-backed: the decrypted data never touches a disk and is gone with the pod.
+# It has to run on minisrv01 (it mounts production's node-local volume), unlike the script, which runs on pisrv01;
+# its memory requests are close to its limits so the scheduler reserves what it uses.
+# Before enabling: give it a read-only database role instead of the owner's password (owner step, once:
+#   CREATE ROLE blockone_drill LOGIN PASSWORD '<random>'; GRANT pg_read_all_data TO blockone_drill;
+# in a SOPS Secret blockone-drill-db), and point PGUSER/PGPASSWORD below at it.
+# Its Jobs are named blockone-backup-drill-*, so the existing BlockOneBackupJobFailed alert reports a failed drill
+# (once Alertmanager has a receiver: see the docs).
+# 03:50 on the 1st, twenty minutes after that night's backup, so production has rarely changed since; a mismatch
+# from a late-night edit shows as a failed drill: rerun scripts/blockone-restore-drill.sh --fresh to confirm.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: blockone-backup-drill
+  labels:
+    app: blockone-backup-drill
+spec:
+  schedule: "50 3 1 * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app: blockone-backup-drill # its own NetworkPolicies, below
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: minisrv01 # blockone-data is a node-local volume
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001 # the app's uid: reads every case file; the pod-local PostgreSQL runs as it too
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: fetch
+              image: rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  dump=$(rclone lsf -R --files-only --include '*.dump' backup: | sort | tail -n 1)
+                  [ -n "$dump" ] || { echo "FAIL: no backup found" >&2; exit 1; }
+                  data="$(dirname "$dump")/$(basename "$dump" .dump | sed 's/^blockone-db-/blockone-data-/').tar.gz"
+                  echo "drilling $dump"
+                  rclone copyto "backup:$dump" /work/db.dump
+                  rclone copyto "backup:$data" /work/data.tar.gz
+              env:
+                - name: R2_ENDPOINT
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: R2_ENDPOINT}}
+                - name: R2_BUCKET
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: R2_BUCKET}}
+                - {name: RCLONE_CONFIG_R2_TYPE, value: s3}
+                - {name: RCLONE_CONFIG_R2_PROVIDER, value: Cloudflare}
+                - {name: RCLONE_CONFIG_R2_ENDPOINT, value: $(R2_ENDPOINT)}
+                - name: RCLONE_CONFIG_R2_ACCESS_KEY_ID # the read-only token
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: R2_ACCESS_KEY_ID}}
+                - name: RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: R2_SECRET_ACCESS_KEY}}
+                - {name: RCLONE_CONFIG_R2_NO_CHECK_BUCKET, value: "true"}
+                - {name: RCLONE_CONFIG_BACKUP_TYPE, value: crypt}
+                - {name: RCLONE_CONFIG_BACKUP_REMOTE, value: "r2:$(R2_BUCKET)/blockone"}
+                - {name: RCLONE_CONFIG_BACKUP_FILENAME_ENCRYPTION, value: standard}
+                - {name: RCLONE_CONFIG_BACKUP_DIRECTORY_NAME_ENCRYPTION, value: "true"}
+                - name: RCLONE_CONFIG_BACKUP_PASSWORD
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: RCLONE_CRYPT_PASSWORD}}
+                - name: RCLONE_CONFIG_BACKUP_PASSWORD2
+                  valueFrom: {secretKeyRef: {name: blockone-backup-mirror, key: RCLONE_CRYPT_PASSWORD2}}
+                - {name: HOME, value: /tmp}
+                - {name: XDG_CONFIG_HOME, value: /tmp/.config}
+                - {name: RCLONE_CACHE_DIR, value: /tmp/.cache}
+              resources:
+                requests: {cpu: 50m, memory: 640Mi}
+                limits: {memory: 768Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: work, mountPath: /work}
+                - {name: tmp, mountPath: /tmp}
+            # pod-local PostgreSQL (native sidecar), bound to 127.0.0.1: nothing outside the pod can connect
+            - name: scratch-postgres
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              restartPolicy: Always
+              args: ["-c", "listen_addresses=127.0.0.1", "-c", "fsync=off"]
+              env:
+                - {name: POSTGRES_USER, value: drill}
+                - {name: POSTGRES_DB, value: drill}
+                - {name: POSTGRES_HOST_AUTH_METHOD, value: trust}
+              startupProbe:
+                exec: {command: ["pg_isready", "-h", "127.0.0.1", "-U", "drill", "-d", "drill"]}
+                periodSeconds: 3
+                failureThreshold: 60
+              resources:
+                requests: {cpu: 100m, memory: 1280Mi}
+                limits: {memory: 1536Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: pgdata, mountPath: /var/lib/postgresql}
+                - {name: pgrun, mountPath: /var/run/postgresql}
+                - {name: tmp, mountPath: /tmp}
+          containers:
+            - name: check
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  PGOPTIONS="" pg_restore -h 127.0.0.1 -U drill -d drill --no-owner --single-transaction --exit-on-error /work/db.dump
+                  PGPASSWORD="" PGOPTIONS="" psql -h 127.0.0.1 -U drill -d drill -At -F ' ' -c "$ROWS_SQL" > /tmp/rows.backup
+                  for i in $(seq 1 60); do pg_isready -q -h blockone-postgres -U blockone -d blockone && break; sleep 2; done
+                  psql -h blockone-postgres -U blockone -d blockone -At -F ' ' -c "$ROWS_SQL" > /tmp/rows.live
+                  mkdir /restore/files
+                  tar -C /restore/files -xzf /work/data.tar.gz
+                  (cd /restore/files && find . -type f -print0 | sort -z | xargs -0 -r sha256sum) > /tmp/files.backup
+                  (cd /live && find . \( -path ./lost+found -o -path './.pre-restore-*' -o -path './.restoring-*' \) -prune \
+                    -o -type f -print0 | sort -z | xargs -0 -r sha256sum) > /tmp/files.live
+                  echo "backup: $(wc -l < /tmp/rows.backup) tables, $(wc -l < /tmp/files.backup) files"
+                  if diff /tmp/rows.backup /tmp/rows.live && diff /tmp/files.backup /tmp/files.live > /tmp/files.diff; then
+                    echo "DRILL PASSED: every table's row count and every case file's SHA-256 match production"
+                  else
+                    echo "DRILL FAILED: the restored backup differs from production (first differences):" >&2
+                    head -n 40 /tmp/files.diff >&2
+                    exit 1
+                  fi
+              env:
+                - name: ROWS_SQL
+                  value: >-
+                    select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I',
+                    table_schema, table_name), false, true, '')))[1]::text from information_schema.tables
+                    where table_schema = 'public' and table_type = 'BASE TABLE' order by 1
+                - name: PGPASSWORD # production's, for now: switch to the blockone_drill role before enabling
+                  valueFrom: {secretKeyRef: {name: blockone-db, key: password}}
+                - {name: PGOPTIONS, value: "-c default_transaction_read_only=on"} # the server refuses writes
+                - {name: PGCONNECT_TIMEOUT, value: "10"}
+                - {name: HOME, value: /tmp}
+              resources:
+                requests: {cpu: 100m, memory: 2304Mi}
+                limits: {memory: 2560Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: work, mountPath: /work, readOnly: true}
+                - {name: restore, mountPath: /restore}
+                - {name: live, mountPath: /live, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: live
+              persistentVolumeClaim:
+                claimName: blockone-data
+                readOnly: true
+            # memory-backed: the decrypted backup and the restored data never touch a disk
+            - {name: work, emptyDir: {medium: Memory, sizeLimit: 512Mi}}
+            - {name: restore, emptyDir: {medium: Memory, sizeLimit: 2Gi}}
+            - {name: pgdata, emptyDir: {medium: Memory, sizeLimit: 1Gi}}
+            - {name: pgrun, emptyDir: {medium: Memory, sizeLimit: 16Mi}}
+            - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 64Mi}}
+---
+# The drill pod reaches DNS, production's PostgreSQL and HTTPS on public addresses (R2); nothing reaches it
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-backup-drill
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-backup-drill
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: blockone-postgres
+      ports:
+        - {port: 5432, protocol: TCP}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - {port: 443, protocol: TCP}
+---
+# PostgreSQL accepts the drill pod too (NetworkPolicies add up: the base's blockone-postgres policy is unchanged)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-postgres-from-drill
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: blockone-backup-drill
+      ports:
+        - {port: 5432, protocol: TCP}

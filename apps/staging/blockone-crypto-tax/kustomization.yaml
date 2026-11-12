@@ -17,6 +17,9 @@ resources:
   # RESTORE ONLY (docs/blockone-crypto-tax.md, "Backups and restore"): uncomment with the patch below, then
   # comment both out again once the restore is checked.
   # - restore.yaml
+  # SCHEMA DOWNGRADE ONLY (an app-only rollback across migrations; app repo scripts/release/rollback.sh):
+  # listed with the scale-to-zero patch, then unlisted again.
+  # - migrate-downgrade.yaml
 # patches:
 #   # Stops the API and worker while a restore runs, so nothing writes to the database or case files
 #   - target: {kind: Deployment, name: "blockone-(api|worker)"}

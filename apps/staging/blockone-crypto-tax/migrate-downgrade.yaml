@@ -1,0 +1,65 @@
+# SCHEMA DOWNGRADE, run on purpose only (an app-only rollback across migrations). Not applied until its line in
+# kustomization.yaml is uncommented, with the scale-to-zero patch there: the app is stopped first. The app repo's
+# scripts/release/rollback.sh makes these edits through PRs (set the revision and a Job name of its own, list it,
+# wait, then unlist it with the previous image), after a verified backup taken with the app stopped.
+#
+# Runs the CURRENT image's `migrate downgrade <revision>` (only the newer image knows how to undo its own
+# migrations; the previous image's migrate step can't start on a revision it doesn't know). A downgrade may drop
+# data a migration added: rollback.sh lists each one's `drops` before it asks.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: blockone-migrate-downgrade
+  labels:
+    app: blockone-migrate-downgrade
+spec:
+  backoffLimit: 0 # a failed downgrade is looked at, not retried
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        app: blockone-backup # the backup's NetworkPolicy: PostgreSQL, DNS (and HTTPS out, unused here)
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: downgrade
+          image: ghcr.io/turpinator-x/blockone-crypto-tax
+          args: ["migrate", "downgrade", "REPLACE_ME"]
+          env:
+            - name: BLOCKONE_WEB_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: blockone-db
+                  key: password
+            - name: BLOCKONE_WEB_DATABASE_URL
+              value: postgresql+psycopg://blockone:$(BLOCKONE_WEB_DB_PASSWORD)@blockone-postgres:5432/blockone
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

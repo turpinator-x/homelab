@@ -15,7 +15,7 @@ I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise I
 |---|---|
 | Cluster | Two-node k3s (v1.36): a mini PC control plane and a Raspberry Pi 5 worker, mixed amd64 and arm64 |
 | GitOps | FluxCD reconciles [`clusters/staging`](clusters/staging) every minute over a read-only deploy key; Kustomize base and overlays in [`apps/`](apps) |
-| Public apps | [Linkding](https://github.com/sissbruecker/linkding), [Audiobookshelf](https://github.com/advplyr/audiobookshelf) and the AI-assisted dashboard, through Cloudflare Tunnels with no inbound ports open. A private tester app (FastAPI, worker, PostgreSQL) behind Cloudflare Access, in a namespace that enforces the restricted Pod Security level with default-deny NetworkPolicies, with nightly encrypted backups to Cloudflare R2 and the other node, checked every night and restore-drilled in a throwaway cluster ([write-up](docs/blockone-crypto-tax.md)) |
+| Public apps | [Linkding](https://github.com/sissbruecker/linkding), [Audiobookshelf](https://github.com/advplyr/audiobookshelf) and the AI-assisted dashboard, through Cloudflare Tunnels with no inbound ports open. A private tester app (FastAPI, worker, PostgreSQL) behind Cloudflare Access, in a namespace that enforces the restricted Pod Security level with default-deny NetworkPolicies, with nightly encrypted backups to Cloudflare R2 and the other node, checked every night and restore-drilled in a throwaway cluster ([write-up](docs/blockone-crypto-tax.md)); a separate staging deployment with synthetic data, its own namespace, tunnel and Access app, and a CI check that it can't touch production ([staging](docs/blockone-crypto-tax-staging.md)) |
 | AI platform | A small language model served on CPU by llama.cpp on both nodes, behind an agentgateway gateway (AI-assisted, in progress): API keys, per-key request and token limits, failover between nodes, model file pinned by SHA-256, locked-down pods and NetworkPolicy, Prometheus metrics including time to first token, a Grafana dashboard and alerts. Gateway chosen over LiteLLM after its 2026 supply-chain compromises ([decision record](docs/llm-gateway-decision.md)). See [docs/llm.md](docs/llm.md) |
 | LAN apps | [Homepage](https://gethomepage.dev) start page with Ingress auto-discovery and read-only RBAC; Traefik Ingress for LAN hostnames |
 | Secrets | SOPS and age, decrypted by Flux; a pre-commit hook blocks commits with an unencrypted Secret or a leaked credential |
@@ -44,6 +44,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 - [docs/llm.md](docs/llm.md): a self-hosted model platform, in progress (AI-assisted)
 - [docs/homepage.md](docs/homepage.md): the LAN start page
 - [docs/blockone-crypto-tax.md](docs/blockone-crypto-tax.md): a private tester app behind Cloudflare Access, with its own PostgreSQL and encrypted, verified backups (AI-assisted)
+- [docs/blockone-crypto-tax-staging.md](docs/blockone-crypto-tax-staging.md): its staging deployment, isolated from production, where clients try features before release (AI-assisted)
 - [docs/decisions.md](docs/decisions.md): design choices and their reasons
 - [docs/status.md](docs/status.md): current work and known issues
 

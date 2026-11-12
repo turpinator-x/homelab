@@ -221,6 +221,79 @@ Drilled on 2026-11-11 in a throwaway kind cluster (Kubernetes 1.37, three nodes;
 
 The first restore attempt found a bug, fixed before the passing run: tar can't change the mode of the volume's root (owned by root), so unpacking straight into `/data` failed after the files had already been moved aside. The Job now unpacks into a folder first and swaps afterwards.
 
+## Releases: staging, promotion, rollback
+
+Since 2026-11-12 an app change reaches this deployment only through staging (`docs/blockone-crypto-tax-staging.md`) and the owner's approval. The scripts are in the app repo (`scripts/release/`, AI-assisted), the process in its `docs/release_process.md`. What they do here:
+
+- **`stage.sh <app PR>`** changes nothing in this namespace. It reads production's schema revision (a SELECT on `alembic_version`) to report which migrations the change brings.
+- **`promote.sh <sha>`** refuses a commit without a passing `staging/e2e` status, or whose GHCR digest differs from the one that passed. Then, before the image bump: a backup Job from `cronjob/blockone-backup` (`bk-predeploy-<sha>-<time>`), which must finish with `cryptcheck` matching both files, and a mirror Job from `cronjob/blockone-backup-mirror` (`bkv-...`), which must fetch that same backup from R2, decrypt it and read it (tables with data, archive entries). Either failing stops the promotion before anything is deployed. The backup stamp, both digests and both schema revisions go into the promotion record (workstation, `~/.local/state/blockone-release/releases.jsonl`) and into the homelab commit message. Then the usual image-bump PR and the checks (rollout, migrate Completed, schema equal to staging's, no API log errors, 302 from Access).
+- **`rollback.sh`** (app repo, `docs/release_process.md`, "Rollback") changes this overlay only through PRs labelled **`production-change`**, after the owner typed the current taxpayer count (and the backup stamp). The order: **app, schema unchanged:** verified backup, image PR. **App, schema moved:** stop PR (the scale-to-zero patch), verified backup with the app stopped, a PR listing `migrate-downgrade.yaml` (a Job running the **current** image's `migrate downgrade <revision>` under a name of its own), then a PR unlisting it, removing the patch and pinning the previous image. **Data / undo:** stop PR pinning the target image, verified backup with the app stopped, a PR listing `restore.yaml` with the backup's stamp under a name of its own (`blockone-restore-<stamp>`), then a PR unlisting it and removing the patch. A failed step stops the script with the app still stopped; both Jobs change the database in one transaction, so a failure leaves it as it was. Every overlay edit is idempotent and every Job gets a new name, so a rerun resumes the unfinished rollback (it unlists what the failed run left listed first) and `undo` works after a failure too.
+
+**Change to the production restore Job (2026-11-12, needs the owner's review):** `restore.yaml`'s database step no longer uses `pg_restore --clean --if-exists --single-transaction`. That drops only what the dump has, so a backup from before a migration that added a table with a foreign key on `taxpayers` (0008's `wallet_kinds`) failed and rolled back, leaving the app stopped; a new table without a foreign key would have survived and broken the next migrate. It now writes the dump out as SQL first (an unreadable dump never reaches the database), then runs `DROP SCHEMA public CASCADE; CREATE SCHEMA public; ALTER SCHEMA public OWNER TO pg_database_owner; GRANT USAGE ON SCHEMA public TO PUBLIC;` (the schema as a new database has it) and the SQL with `psql --single-transaction -v ON_ERROR_STOP=1`. The `work` volume is writable in that step for the SQL file, which a trap removes however the step ends. The app repo's CI replays exactly these commands on PostgreSQL 18 (an N-1 dump over an N schema, and a failing restore that must change nothing). The Job is applied only when listed, so production's render is unchanged.
+
+The backup Jobs these create follow the CronJobs' settings and land in the same R2 folders, so the 35-day retention applies to them too. A pre-deploy backup fails (and stops the promotion) if a job writes case files while tar reads them: promote when nothing is running.
+
+### Restore drill
+
+`scripts/blockone-restore-drill.sh [--fresh] [--backup <stamp>]` (AI-assisted) proves a backup restores, away from production and staging:
+
+1. `--fresh` takes a backup first, so the comparison is exact.
+2. A throwaway namespace `blockone-drill-<time>`: restricted Pod Security, default-deny, the drill pod may reach only DNS and HTTPS on public addresses. No Service, no ingress, no tunnel. Only the mirror's read-only Secret is copied in (piped, never printed).
+3. One Job pod on **pisrv01** (not the node with production's volumes, so a drill can't starve production; memory requests close to the limits): fetch + decrypt (read-only token), restore into a PostgreSQL that lives inside the pod (bound to 127.0.0.1), unpack the case files, print every table's row count and every file's SHA-256. All its volumes are memory-backed (tmpfs): the decrypted data never touches a disk and goes with the pod.
+4. Production's side, read-only: the same row-count query on `blockone-postgres-0` in a read-only session (`default_transaction_read_only`), and SHA-256 of every case file through `kubectl exec deploy/blockone-worker`.
+5. Any difference fails the drill; the namespace is deleted whatever happens (trap), and a namespace that can't be confirmed gone fails the run.
+
+It creates and deletes cluster objects directly (a namespace and its contents), an exception to "change Git, not the cluster" like the backups' first run: run it on purpose. **Suggested rhythm: monthly, and after any change to the backup or restore manifests.**
+
+A scheduled version is proposed, **not enabled**: `apps/staging/blockone-crypto-tax/restore-drill.yaml`, a monthly CronJob (03:50 on the 1st, after that night's backup) that runs the same pod in this namespace instead of a throwaway one (a CronJob creating namespaces would need a ServiceAccount allowed to create namespaces and Secrets, more power than a drill should hold). It runs on minisrv01 (it mounts the case-files volume read-only), with its own label `app: blockone-backup-drill` and NetworkPolicies, and compares against production's database in a read-only session. Before enabling it, give it a read-only role (`CREATE ROLE blockone_drill LOGIN ...; GRANT pg_read_all_data TO blockone_drill;`, its password in a SOPS Secret) instead of the owner's password. Its Jobs are named `blockone-backup-drill-*`, so `BlockOneBackupJobFailed` reports a failed drill. To enable it: add `- restore-drill.yaml` to `kustomization.yaml`, with the owner's approval.
+
+Tested on 2026-11-12 with a stand-in `kubectl` (not on the cluster): the generated manifests pass kubeconform strict; the comparison passes on matching data and fails, listing the table, on a changed row count; the namespace cleanup runs on success and failure. The row-count query was run on PostgreSQL 18. **Not yet run on the homelab.**
+
+### Backup security review (2026-11-12)
+
+| Question | Answer |
+|---|---|
+| Encrypted at rest? | Yes in R2 and on pisrv01: rclone crypt (XSalsa20-Poly1305, names and contents), checked in the drill above (2026-11-11). The plaintext dump and archive exist only in the backup pod's `emptyDir` on minisrv01 while the Job runs (disk-backed; see gaps). The live database and case files sit on minisrv01's local-path volumes: encrypted only if minisrv01's disk is (not checked here) |
+| Off site? | R2 (Cloudflare), plus a second copy on pisrv01 (copy, never sync; `--immutable`) |
+| Retention | 35 days in both places (`rclone delete --min-age 35d`, only after a successful run). Pre-deploy and pre-rollback backups follow the same rule |
+| Who/what can read a backup | Anyone holding both crypt passwords (password manager; the SOPS Secrets). Anyone with the repo's age private key, which decrypts those Secrets (the workstation has it). Anyone who can read Secrets in `blockone-crypto-tax` (cluster admin: the `homelab` kubeconfig). Pods: the backup and mirror Jobs, the restore Job, and (temporarily) the drill pod. R2 tokens and the Cloudflare account, and root on pisrv01, give ciphertext only |
+| Who can delete a backup | The read-and-write R2 token (the nightly job), any Cloudflare account admin, root on pisrv01 for the mirror copy |
+
+Gaps found (none changed here; proposals for the owner):
+
+0. **No alert receivers (the top production gap).** Every backup alert above fires only into Prometheus and Alertmanager's UI: a failed nightly or pre-deploy backup, or a failed drill, notifies nobody. Proposal, not applied (it changes `monitoring/`): an email receiver through Cloudflare Email Routing or any SMTP relay, as a HelmRelease values change plus a SOPS Secret for the SMTP password:
+
+   ```yaml
+   # monitoring/controllers/base/kube-prometheus-stack values (sketch)
+   alertmanager:
+     config:
+       route:
+         receiver: owner-email
+         group_by: [alertname, namespace]
+         routes:
+           - receiver: "null"
+             matchers: [alertname = Watchdog]
+       receivers:
+         - name: "null"
+         - name: owner-email
+           email_configs:
+             - to: <owner address>
+               from: alerts@jarrodturpin.dev
+               smarthost: <smtp host>:587
+               auth_username: <user>
+               auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
+               send_resolved: true
+     alertmanagerSpec:
+       secrets: [alertmanager-smtp]   # SOPS-encrypted Secret in monitoring, key "password"
+   ```
+
+   Then check it with a test alert (`amtool alert add test severity=critical` from the Alertmanager pod) before relying on it.
+1. **Plaintext on disk during the backup.** `blockone-backup`'s `work` `emptyDir` is disk-backed, so the unencrypted dump and tar are written to minisrv01's disk while the Job runs, until kubelet cleans up the finished pod's volumes. Proposal: `medium: Memory` with a size limit (the 2026-11-12 pair is 77 MiB) and a matching memory limit on the containers.
+2. **Bucket lock not confirmed.** Owner step 3 above (an R2 bucket lock rule on `blockone/`, 30 days) is optional; without it, the read-and-write token alone can empty the bucket (the pisrv01 copy survives). Proposal: set it and record that it's on.
+3. **One key opens everything.** The age private key decrypts the crypt passwords and both R2 tokens. Proposal: keep the age key and the crypt passwords offline as well (password manager), and consider a second age recipient held offline so a lost workstation isn't a lost key.
+4. **Both off-site copies depend on one provider account for R2**, and the same account runs Access and the tunnels. Proposal (later, with more clients): a second off-site target outside Cloudflare.
+5. **Node disk encryption unknown.** Check whether minisrv01 and pisrv01 use full-disk encryption; if not, the live volumes and staging's data are readable from a stolen disk.
+
 ## Owner checklist
 
 Do these on the branch, in order, then merge. Values below in `<angle brackets>` are yours to fill in; none of them go into Git unencrypted.
@@ -336,7 +409,7 @@ When something's wrong: `kubectl -n blockone-crypto-tax describe pod <pod>` show
 
 ## Open items
 
-- **Backups** are built (branch `feat/blockone-backups`, "Backups and restore"): nightly logical dumps, so up to a day of data can be lost. Point-in-time restore would need WAL archiving (CloudNativePG with object storage, or pgBackRest); revisit with real client data. A first real restore drill on the homelab is still to do once the backups run.
+- **Backups** run nightly ("Backups and restore"): logical dumps, so up to a day of data can be lost (less around a release: `promote.sh` takes one just before). Point-in-time restore would need WAL archiving (CloudNativePG with object storage, or pgBackRest); revisit with more clients. A first restore drill on the homelab (`scripts/blockone-restore-drill.sh --fresh`) is still to do; the gaps in "Backup security review" are open.
 - **Egress by hostname** (egress proxy or Cilium, above).
 - **Image updates.** Renovate's kustomize manager can follow `images:` digests, but a new `sha-<commit>` tag isn't a version it can order. For now the tag and digest are bumped by hand after each app release; tagging the app repo with `v*.*.*` versions would let Renovate open those PRs.
 - **CI minutes.** The image workflow uses GitHub's hosted runner (arm64 under QEMU) on each push to `main`. If minutes run short, add the repo to the self-hosted runners (`docs/github-runners.md`) or build arm64 natively.

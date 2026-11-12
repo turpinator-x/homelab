@@ -4,14 +4,45 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
+  pull-requests: read # the PR's labels, read when the check runs (below)
 
 jobs:
   validate:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # check-staging-isolation.sh compares production's render with origin/main's
+          persist-credentials: false
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
-      - run: ./scripts/validate.sh
+        with:
+          env: false # never load mise.toml's [env] into later steps: a PR could set the allowance there
+      # A PR may change production beyond its app image only when a maintainer labelled it "production-change".
+      # The labels are read now, not from the event payload: a label added just after the PR was opened (as the
+      # app's rollback script does) is then seen by this run, and the "labeled" event runs the check again.
+      # The allowance goes to validate.sh only as this step's output, as an argument; in CI the check ignores
+      # any BLOCKONE_ALLOW_PROD_CHANGE variable.
+      - name: Production-change label
+        id: label
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          labels=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.labels[].name')
+          if grep -qx 'production-change' <<< "$labels"; then
+            echo "allow=yes" >> "$GITHUB_OUTPUT"
+            echo "labelled production-change: production changes allowed"
+          fi
+      - name: Validate
+        env:
+          ALLOW: ${{ steps.label.outputs.allow }}
+        run: |
+          set -euo pipefail
+          if [ "$ALLOW" = yes ]; then ./scripts/validate.sh --allow-prod-change; else ./scripts/validate.sh; fi

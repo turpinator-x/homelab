@@ -1,0 +1,12 @@
+# Cluster-scoped, so it lives here and not in the staging overlay (whose objects must all be namespaced).
+# BlockOne staging's pods run below every other pod: production (and the rest of the cluster) has the default
+# priority 0, staging -100, and staging never preempts anything. If minisrv01 runs short, the scheduler and the
+# kubelet's eviction order favour production. docs/blockone-crypto-tax-staging.md.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: blockone-staging
+value: -100
+globalDefault: false
+preemptionPolicy: Never
+description: "BlockOne staging: below production (default 0); never preempts."

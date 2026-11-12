@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-11_
+_Last updated: 2026-11-12_
 
 ## Running
 
@@ -15,6 +15,7 @@ _Last updated: 2026-11-11_
 | Dashboard | `apps/*/dashboard` | image from `homelab-dashboard` repo (GHCR), NetworkPolicy, no SA token |
 | Model platform | `apps/*/llm` | llama.cpp on CPU on both nodes behind an agentgateway gateway: API keys, per-key limits, failover, metrics including time to first token, alerts. Phases 1 and 2 of 4 |
 | BlockOne Crypto Tax | `apps/*/blockone-crypto-tax` | tester app (API, worker, PostgreSQL) behind its own tunnel and Cloudflare Access; own `blockone-crypto-tax` Kustomization; deployed 2026-11-11 (PR #32). Backups on a branch (Next) |
+| BlockOne staging | `apps/staging/blockone-crypto-tax-staging` | **built, not deployed** (branch `feat/blockone-staging`): own namespace, Kustomization, PostgreSQL, tunnel and Access app, synthetic data only, priority below production (PriorityClass `blockone-staging`); waits for the owner steps in `docs/blockone-crypto-tax-staging.md` |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
 | Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 14 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
@@ -27,6 +28,7 @@ _Last updated: 2026-11-11_
 
 0. **In progress:** nightly encrypted backups for the BlockOne Crypto Tax app (branch `feat/blockone-backups`): `blockone-backup` (pg_dump + case files, rclone crypt, to R2) and `blockone-backup-mirror` (copy to pisrv01, decrypt and check last night's), 35 days each, alerts, a Git-run restore Job. Drilled end to end in kind with MinIO; waits for the R2 bucket, two tokens and the two SOPS Secrets. See `docs/blockone-crypto-tax.md`, "Backups and restore".
 0. **In progress:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization). Built on branch `feat/arc-runners`; waits for the GitHub App credentials, then a repo-by-repo switch. See `docs/github-runners.md`.
+0. **Waiting on the owner:** BlockOne staging (`docs/blockone-crypto-tax-staging.md`, owner steps: tunnel, Access application + invite group, service token, three Secrets), then the release flow in the app repo (`scripts/release/stage.sh`, `promote.sh`, `rollback.sh`). First restore drill on the homelab: `scripts/blockone-restore-drill.sh --fresh`. Backup gaps to decide, first the missing Alertmanager receiver: `docs/blockone-crypto-tax.md`, "Backup security review". Create the `production-change` PR label (rollback PRs need it). Review the production restore Job change (whole-schema restore).
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
 3. Self-hosted model platform (`docs/llm.md`): phase 3, an SLO on time to first token with a streaming load test. Phase 2 (gateway) deployed 2026-11-08.
@@ -38,6 +40,8 @@ _Last updated: 2026-11-11_
 - Linkding web container logs a supervisord "can't drop privilege" error once at start (expected; background tasks run in the sidecar).
 
 ## Don't repeat
+
+- Staging next to production: add a new overlay and a new Flux Kustomization; never re-path or rename production's (`prune: true` would delete its PostgreSQL and volumes). `scripts/check-staging-isolation.sh` guards the staging build.
 
 - `npx renovate-config-validator` without a version pulls a stale cached v37 that rejects `managerFilePatterns`. Pin `renovate@<cluster version>`.
 - Moving a resource between Flux Kustomizations: `flux suspend` the old one first, or its prune deletes the resource.

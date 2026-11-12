@@ -1,0 +1,17 @@
+# A ceiling on what staging can take from minisrv01, so a runaway test can't starve production (same node).
+# Steady state is about 0.4 Gi requested and 2.2 Gi of limits; the headroom covers a rolling update (one extra API
+# and worker pod) plus a demo reset. Every container here sets memory requests and limits and CPU requests.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: blockone-staging
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1536Mi
+    limits.memory: 4608Mi
+    persistentvolumeclaims: "3"
+    requests.storage: 4Gi
+    pods: "12"
+    services.loadbalancer: "0"
+    services.nodeports: "0"

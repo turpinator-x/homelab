@@ -48,3 +48,10 @@ Outbound-only tunnels, one per app, two replicas each. **Why:** no router ports 
 - **Why:** private-repo minutes ran out (1,970 of 2,000 in ten days). Ephemeral pods start clean for every job, are deployed and capped through Git like everything else, and need no SSH access to the host.
 - **Exception to the non-root rule:** `arc-runners-dind` allows privileged pods because Docker-in-Docker needs them (the curriculum tests start privileged test containers, the study app builds images and runs k3d). Limited to my own private repos, capped by a ResourceQuota, and kept apart from `arc-runners` (baseline), which serves jobs that need no Docker. Public repos never use self-hosted runners.
 - **Revisit:** if a rootless builder (BuildKit rootless, Kaniko) can replace Docker-in-Docker for these jobs.
+
+## 2026-11-12: a separate staging deployment for the BlockOne app, beside production
+
+- **Decision:** staging is a new overlay (`apps/staging/blockone-crypto-tax-staging`) of the same base, in namespace `blockone-staging`, under its own Flux Kustomization, with its own tunnel and Access application. Production's overlay, path and Kustomization stay exactly as they are.
+- **Why:** with `prune: true`, moving or renaming production's Kustomization or path would delete its PostgreSQL and volumes. A second overlay can only add objects, and `scripts/check-staging-isolation.sh` fails CI if any staging object leaves its namespace or production's object list changes.
+- **Tests through Cloudflare, not around it:** the smoke suite uses an Access service token scoped to the staging application, which the app accepts only in staging mode. It tests what testers use, with no second, weaker way into the API.
+- **No backups for staging:** synthetic data only, wiped at every deploy.
