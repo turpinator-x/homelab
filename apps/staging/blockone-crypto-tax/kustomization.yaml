@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 34c0cd7: feat(blofin): BloFin API importer with evidence, reconciliation and CPA raw expo
+  # Built from the app repo's main fbe4131: fix(blofin): treat Earn transfers as internal and book a closed round trip's int
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-34c0cd7f0cd04c28535195156cf631e04797e93e
-    digest: sha256:bb757f2916bdb9b8bbefb43faa7259a57441553a79cdb1c0e379dd484d4dfb09
+    newTag: sha-fbe4131927ac598c0fe63cf727085ee4592457e1
+    digest: sha256:1803967e805e3c5443bc721e7df378f79f8697254c3a608ddce5b49716b642ee
