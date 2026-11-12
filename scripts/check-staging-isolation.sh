@@ -9,14 +9,29 @@
 #   2. the staging Flux Kustomization doesn't point at the staging overlay with targetNamespace blockone-staging,
 #      or production's (clusters/staging/blockone-crypto-tax.yaml) isn't still name blockone-crypto-tax, path
 #      ./apps/staging/blockone-crypto-tax, prune true and no targetNamespace;
-#   3. without BLOCKONE_ALLOW_PROD_CHANGE=1 (CI sets it only for a PR labelled "production-change"):
+#   3. unless the change is meant (--allow-prod-change, which CI passes only for a PR labelled
+#      "production-change"; locally BLOCKONE_ALLOW_PROD_CHANGE=1 works too, but CI=true ignores the variable):
 #      production's FULL render (base included) differs from origin/main's beyond the app image
-#      (ghcr.io/turpinator-x/blockone-crypto-tax followed by : or @), or production's Flux Kustomization file or
-#      anything under infrastructure/configs (cluster-wide objects) differs from origin/main's at all.
+#      (ghcr.io/turpinator-x/blockone-crypto-tax followed by : or @), or any of these differs from origin/main's at
+#      all: production's Flux Kustomization, infrastructure/configs (cluster-wide objects), mise.toml (CI's tool
+#      versions and environment), .github/workflows/, scripts/validate.sh and this check.
+#   A staging NetworkPolicy ipBlock that covers a private range (10/8, 172.16/12, 192.168/16, 169.254/16; the pod
+#   and Service networks are inside 10/8) must list that range in its `except`.
 #      App-image-only differences (promotions) always pass and are listed.
 # origin/main must exist (CI checks out with fetch-depth 0): without it the production check can't run, so it fails.
 set -euo pipefail
 shopt -s inherit_errexit
+
+allow=0
+for a in "$@"; do
+  case "$a" in
+    --allow-prod-change) allow=1 ;;
+    *) echo "usage: $0 [--allow-prod-change]" >&2; exit 2 ;;
+  esac
+done
+# locally the variable works too; in CI only the argument does (a PR can't set it through the environment)
+if [ "${CI:-}" != true ] && [ "${BLOCKONE_ALLOW_PROD_CHANGE:-}" = 1 ]; then allow=1; fi
+export ALLOW_PROD_CHANGE=$allow
 
 cd "$(git rev-parse --show-toplevel)"
 stage=apps/staging/blockone-crypto-tax-staging
@@ -25,7 +40,9 @@ flux_ks=clusters/staging/blockone-staging.yaml
 
 render=$(kubectl kustomize "$stage") || { echo "staging isolation FAILED: kubectl kustomize $stage failed" >&2; exit 1; }
 python3 - "$render" <<'EOF'
-import re, sys, yaml
+import ipaddress, re, sys, yaml
+# the home network, the pod network (10.42/16) and the Service network (10.43/16) are inside these
+PRIVATE = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")]
 bad = []
 for d in yaml.safe_load_all(sys.argv[1]):
     if not d:
@@ -43,6 +60,19 @@ for d in yaml.safe_load_all(sys.argv[1]):
     if kind == "NetworkPolicy":
         for rule in (d["spec"].get("ingress") or []) + (d["spec"].get("egress") or []):
             for peer in (rule.get("from") or []) + (rule.get("to") or []):
+                if "ipBlock" in peer:
+                    blk = peer["ipBlock"] or {}
+                    try:
+                        net = ipaddress.ip_network(blk.get("cidr", ""), strict=False)
+                        excepts = [ipaddress.ip_network(e, strict=False) for e in blk.get("except") or []]
+                    except ValueError as e:
+                        bad.append(f"NetworkPolicy {name}: bad ipBlock {blk!r}: {e}")
+                        continue
+                    for private in PRIVATE:
+                        if net.version == private.version and net.overlaps(private) and not any(
+                                private.subnet_of(e) for e in excepts if e.version == private.version):
+                            bad.append(f"NetworkPolicy {name}: ipBlock {net} reaches {private} (the home network, "
+                                       "pods or Services) without excepting it")
                 if "namespaceSelector" not in peer:
                     continue
                 sel = peer["namespaceSelector"] or {}
@@ -86,19 +116,21 @@ git archive origin/main apps/base apps/staging | tar -x -C "$tmp"
 kubectl kustomize "$tmp/$prod" > "$tmp/main.yaml" || { echo "production check FAILED: origin/main's render failed" >&2; exit 1; }
 kubectl kustomize "$prod" > "$tmp/here.yaml" || { echo "production check FAILED: kubectl kustomize $prod failed" >&2; exit 1; }
 # Production's Flux Kustomization and the cluster-wide configs: any difference at all needs the label
-changed_files=$(git diff --name-only origin/main -- clusters/staging/blockone-crypto-tax.yaml infrastructure/configs) \
+gated=(clusters/staging/blockone-crypto-tax.yaml infrastructure/configs mise.toml .github/workflows scripts/validate.sh
+       scripts/check-staging-isolation.sh)
+changed_files=$(git diff --name-only origin/main -- "${gated[@]}") \
   || { echo "production check FAILED: git diff failed" >&2; exit 1; }
-untracked=$(git ls-files --others --exclude-standard -- clusters/staging/blockone-crypto-tax.yaml infrastructure/configs) \
+untracked=$(git ls-files --others --exclude-standard -- "${gated[@]}") \
   || { echo "production check FAILED: git ls-files failed" >&2; exit 1; }
 changed_files=$(printf '%s\n%s\n' "$changed_files" "$untracked" | sed '/^$/d')
 if [ -n "$changed_files" ]; then
-  echo "changed against origin/main (production's Flux Kustomization / cluster-wide configs):" >&2
+  echo "changed against origin/main (production's Flux Kustomization, cluster-wide configs, CI or this check):" >&2
   while IFS= read -r f; do echo "  $f" >&2; done <<< "$changed_files"
-  if [ "${BLOCKONE_ALLOW_PROD_CHANGE:-}" != 1 ]; then
-    echo "production check FAILED: label the PR 'production-change' (CI) or set BLOCKONE_ALLOW_PROD_CHANGE=1" >&2
+  if [ "$allow" != 1 ]; then
+    echo "production check FAILED: label the PR 'production-change' (CI) or pass --allow-prod-change" >&2
     exit 1
   fi
-  echo "production change allowed (BLOCKONE_ALLOW_PROD_CHANGE=1)"
+  echo "production change allowed"
 fi
 python3 - "$tmp/main.yaml" "$tmp/here.yaml" <<'EOF'
 import difflib, os, re, sys, yaml
@@ -130,10 +162,10 @@ if images:
     print(f"production: app image changed in {len(images)} object(s) ({', '.join(images)}): allowed")
 if changed:
     print("production's render differs from origin/main's:\n  " + "\n  ".join(changed), file=sys.stderr)
-    if os.environ.get("BLOCKONE_ALLOW_PROD_CHANGE") != "1":
-        sys.exit("production check FAILED: label the PR 'production-change' (CI) or set BLOCKONE_ALLOW_PROD_CHANGE=1 "
+    if os.environ.get("ALLOW_PROD_CHANGE") != "1":
+        sys.exit("production check FAILED: label the PR 'production-change' (CI) or pass --allow-prod-change "
                  "if this change is meant to alter production")
-    print("production change allowed (BLOCKONE_ALLOW_PROD_CHANGE=1)")
+    print("production change allowed")
 elif not images:
     print("production: render identical to origin/main's")
 EOF
