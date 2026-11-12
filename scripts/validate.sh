@@ -15,7 +15,10 @@ kubeconform_args=(-strict -summary -skip Secret "${schemas[@]}")
 echo "== Flux Kustomizations in clusters/staging"
 kubeconform "${kubeconform_args[@]}" clusters/staging/*.yaml
 
-for dir in apps/staging apps/staging/blockone-crypto-tax infrastructure/controllers/staging infrastructure/configs/staging infrastructure/arc/staging monitoring/controllers/staging; do
+for dir in apps/staging apps/staging/blockone-crypto-tax apps/staging/blockone-crypto-tax-staging infrastructure/controllers/staging infrastructure/configs/staging infrastructure/arc/staging monitoring/controllers/staging; do
   echo "== $dir"
   kubectl kustomize "$dir" | kubeconform "${kubeconform_args[@]}" -
 done
+
+echo "== BlockOne staging isolation"
+./scripts/check-staging-isolation.sh

@@ -1,0 +1,115 @@
+# STAGING for the BlockOne Crypto Tax app: the same base as production (apps/base/blockone-crypto-tax), in its own
+# namespace with its own PostgreSQL, volume, Secrets, tunnel and hostname, and synthetic data only. Clients and the
+# owner try a feature here before it is promoted to production (docs/blockone-crypto-tax-staging.md).
+#
+# Isolation from production (namespace blockone-crypto-tax, Kustomization blockone-crypto-tax), which this overlay
+# never touches:
+#   - every object lands in namespace blockone-staging (this namespace: field, and the Flux Kustomization's
+#     targetNamespace as a second guard); scripts/check-staging-isolation.sh fails validate.sh otherwise;
+#   - default-deny NetworkPolicies in each namespace: no pod here can reach production's PostgreSQL or API;
+#   - its own Flux Kustomization (clusters/staging/blockone-staging.yaml), so a broken staging change can't stop
+#     production reconciling, and pruning here can only delete staging objects;
+#   - a ResourceQuota caps what staging can take from minisrv01.
+# No backups: staging holds only the synthetic demo taxpayers, wiped at every deploy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: blockone-staging
+resources:
+  - ../../base/blockone-crypto-tax/
+  - cloudflare.yaml
+  - demo-reset.yaml
+  - quota.yaml
+  # SOPS-encrypted Secrets. Made for staging only (never production's values):
+  - blockone-db-secret.yaml           # generated: PostgreSQL password
+  - blockone-staging-keys-secret.yaml # generated: the tax id key (no real tax ids are ever stored here)
+  # Owner steps (docs/blockone-crypto-tax-staging.md): uncomment each once its file exists. Until then the pods
+  # wait in CreateContainerConfigError or ImagePullBackOff; production is unaffected.
+  # - blockone-app-secret.yaml        # Access team + this app's AUD tag, invited testers, the smoke service token
+  # - ghcr-pull-secret.yaml           # read:packages token to pull the private image
+  # - tunnel-credentials-secret.yaml  # the blockone-staging tunnel's credentials
+configMapGenerator:
+  - name: blockone-settings
+    behavior: merge
+    literals:
+      - BLOCKONE_WEB_SITE_MODE=staging # STAGING banner, a demo taxpayer per tester, demo-reset allowed
+      - BLOCKONE_WEB_PRICES_ONLINE=false # synthetic files carry their own USD values; keeps API quotas for production
+patches:
+  # Production's backups and their alerts are not part of staging (nothing here to keep). The alert rules also
+  # name production's namespace, so a copy would only duplicate production's alerts.
+  - target: {kind: CronJob, name: "blockone-backup|blockone-backup-mirror"}
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: unused
+  - target: {kind: PersistentVolumeClaim, name: blockone-backup-mirror}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: unused
+  - target: {kind: PrometheusRule, name: blockone-backup}
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: unused
+  - target: {kind: NetworkPolicy, name: "blockone-backup|blockone-backup-mirror"}
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: unused
+  # Staging may be pruned whole: no "keep on prune" on its namespace and volumes, which use the Delete class
+  - target: {kind: Namespace}
+    patch: |-
+      - op: remove
+        path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1prune
+  - target: {kind: PersistentVolumeClaim, name: blockone-data}
+    patch: |-
+      - op: remove
+        path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1prune
+      - op: replace
+        path: /spec/storageClassName
+        value: local-path
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 1Gi
+  - target: {kind: StatefulSet, name: blockone-postgres}
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: local-path
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 256Mi}}
+  # Modest sizes: a few testers and synthetic cases. The staging-only tax id key comes from its own Secret.
+  - target: {kind: Deployment, name: blockone-api}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 20m, memory: 128Mi}, limits: {memory: 512Mi}}
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value: {secretRef: {name: blockone-staging-keys}}
+  - target: {kind: Deployment, name: blockone-worker}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 50m, memory: 192Mi}, limits: {memory: 1Gi}}
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value: {secretRef: {name: blockone-staging-keys}}
+images:
+  # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
+  # Built from the app repo's main 238dc49: feat(web): wallet kinds and the FlareBank opening-lot step
+  - name: ghcr.io/turpinator-x/blockone-crypto-tax
+    newTag: sha-238dc491b88f2496712149926394e34b7291193b
+    digest: sha256:42b59597021d28267e349358fdb69f2381229b41de9bc7675173fff272c6f9fd

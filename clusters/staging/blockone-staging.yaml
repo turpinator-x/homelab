@@ -1,0 +1,23 @@
+# STAGING for the BlockOne Crypto Tax app (docs/blockone-crypto-tax-staging.md): its own Kustomization, separate
+# from production's (blockone-crypto-tax.yaml, unchanged), so a broken staging change never holds up production
+# and pruning here can only ever delete staging objects. targetNamespace pins every object to blockone-staging, a
+# second guard after the overlay's own namespace: field (scripts/check-staging-isolation.sh checks the build).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: blockone-staging
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/staging/blockone-crypto-tax-staging
+  targetNamespace: blockone-staging
+  prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
