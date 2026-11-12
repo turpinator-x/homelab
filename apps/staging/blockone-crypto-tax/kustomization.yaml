@@ -12,7 +12,7 @@ resources:
   - ghcr-pull-secret.yaml
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # First image: built by the app repo's image workflow from main 8166548 (2026-11-11).
+  # Built from the app repo's main ac365b4 (2026-11-12): friendlier pages, wallet grid, Koinly suggestions.
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-81665481c8141f9928a97de519e4dd8b975c4f80
-    digest: sha256:2de27de03c063c4109fa00dcc27928d17f23b2633872091b2ed69737174f2b17
+    newTag: sha-ac365b44fa6cd54809b2570c38567cdf237130b7
+    digest: sha256:dc8c76259d8a108567c823fc3188253740044ce7f2826589ca647f153174d647
