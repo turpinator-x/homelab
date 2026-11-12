@@ -1,6 +1,6 @@
 # BlockOne Crypto Tax tester app
 
-Status: **built, not yet live** (2026-11-11). The manifests are on branch `feat/blockone-crypto-tax`. They go live once the image is built, the Secrets are added, Cloudflare Access is set up and the pull request is merged. **Don't merge before the checklist below is done:** until then the pods can't pull the image or start.
+Status: **deployed** 2026-11-11 (PR #32; Flux applied `main@2af851a`, pods Running on minisrv01). The owner checklist below is how it went live. Nightly backups are on branch `feat/blockone-backups`: see "Backups and restore".
 
 AI-assisted: the manifests, the app's Dockerfile and image workflow, and this page were written with Claude Code. I set the requirements (private app, only two testers, no open ports, secrets encrypted, both architectures) and review and run each step.
 
@@ -36,6 +36,7 @@ flowchart LR
 | Image pin | overlay `kustomization.yaml` (`images:`) | tag `sha-<commit>` plus digest; **placeholder until the first build** |
 | Secrets | overlay `*-secret.yaml.example` | templates only; real ones are SOPS-encrypted (checklist step 4) |
 | Flux | `clusters/staging/blockone-crypto-tax.yaml` | its own Kustomization, not part of `apps` |
+| Backups | `backup.yaml`, `backup-alerts.yaml`, overlay `restore.yaml` | nightly, encrypted, to R2 and pisrv01; see "Backups and restore" |
 
 - **One image, three commands.** The app repo's `Dockerfile` builds one image (`python:3.12.16-slim-trixie` pinned by digest, uid 10001, no secrets inside) whose entrypoint runs `api`, `worker` or `migrate`. Its `image` workflow builds linux/amd64 and linux/arm64 on pushes to `main` and `v*.*.*` tags and pushes `ghcr.io/turpinator-x/blockone-crypto-tax:sha-<commit>` (plus the version on tags). Actions are pinned by commit SHA; the job has `contents: read` and `packages: write` only.
 - **All pods on minisrv01.** `local-path` volumes live on one node, and the API and worker share the case-files volume, so they and PostgreSQL are pinned to minisrv01 with a `nodeSelector` (as Audiobookshelf is). The image is still multi-arch, so moving them later is a manifest change.
@@ -49,7 +50,7 @@ A Flux-managed Job is immutable: a new image tag means Flux must delete and re-c
 
 ### Why its own PostgreSQL
 
-The cluster runs no shared database or operator (checked 2026-11-11). One small StatefulSet is the least to run for two testers. CloudNativePG (used in the AKS project) becomes worth it once backups and point-in-time restore matter: see "Open items".
+The cluster runs no shared database or operator (checked 2026-11-11). One small StatefulSet is the least to run for two testers. Backups are nightly dumps ("Backups and restore"); CloudNativePG (used in the AKS project) becomes worth it once point-in-time restore matters: see "Open items".
 
 ### Why its own Flux Kustomization
 
@@ -63,7 +64,9 @@ The app's Secrets and image are added after the manifests. As part of `apps`, a 
 | cloudflared | nothing | DNS; the API on 8000; public addresses on 7844 (TCP/UDP) and 443 |
 | blockone-api | cloudflared on 8000 | DNS; PostgreSQL; public addresses on 443 (Access signing keys) |
 | blockone-worker | nothing | DNS; PostgreSQL; public addresses on 443 and 51234 (Ripple's XRPL node) |
-| blockone-postgres | pods labelled `blockone-db-client: "true"` (API, worker) on 5432 | nothing |
+| blockone-postgres | pods labelled `blockone-db-client: "true"` (API, worker) or `app: blockone-backup` (nightly backup, restore Job) on 5432 | nothing |
+| blockone-backup | nothing | DNS; PostgreSQL; public addresses on 443 (R2) |
+| blockone-backup-mirror | nothing | DNS; public addresses on 443 (R2) |
 
 "Public addresses" means everything except the private ranges, so no pod here can reach the home network or other apps. **NetworkPolicy can't filter by hostname**: the worker may reach any public HTTPS server, not only the explorers it uses (Etherscan, Routescan, Alchemy, Helius, Solana, Flare/Songbird, XRPL, AlgoNode, Blockfrost, CryptoCompare, CoinGecko, GoPlus, mempool.space, Pi Network). Options, from least to most work:
 
@@ -72,6 +75,151 @@ The app's Secrets and image are added after the manifests. As part of `apps`, a 
 3. **An FQDN-aware CNI:** Cilium's `toFQDNs` policies. Planned with the Talos rebuild, not on k3s's Flannel.
 
 The API's 443 egress is only for Cloudflare's signing keys (`<team>.cloudflareaccess.com/cdn-cgi/access/certs`); the same limitation applies.
+
+## Backups and restore
+
+Nightly, encrypted, in two places: a Cloudflare R2 bucket (off site) and pisrv01's disk (the other node). Built on branch `feat/blockone-backups`; it starts once the owner steps below are done. AI-assisted, like the rest of this page.
+
+```mermaid
+flowchart LR
+  PG[(blockone-postgres)] -->|pg_dump -Fc| B
+  D[(blockone-data<br>read-only)] -->|tar.gz| B
+  B[blockone-backup<br>03:30, minisrv01] -->|rclone crypt| R2[(R2 bucket<br>ciphertext only, 35 days)]
+  R2 -->|rclone copy --immutable<br>read-only token| M[blockone-backup-mirror<br>04:30, pisrv01]
+  M --> MV[(mirror volume<br>ciphertext, 35 days)]
+  M -->|decrypt last night's| V[pg_restore --list<br>tar -t]
+```
+
+| Piece | Where | Notes |
+|---|---|---|
+| Backup | `backup.yaml`, CronJob `blockone-backup` | 03:30 America/Los_Angeles on minisrv01. initContainers `dump` (`pg_dump -Fc` over the Service, checked with `pg_restore --list`) and `archive` (tar of the whole volume, read-only), then `upload` (rclone: encrypt, upload to `YYYY/MM/DD/` in UTC, `cryptcheck` against the local files, delete anything older than 35 days) |
+| Mirror | `backup.yaml`, CronJob `blockone-backup-mirror`, PVC `blockone-backup-mirror` (10 Gi) | 04:30 on pisrv01. Copies the encrypted objects as they are, keeps 35 days, then decrypts last night's pair from its own copy and checks them: `pg_restore --list` must list table data, `tar -tzf` must read the archive. Fails if there's no dump newer than 30 hours |
+| Alerts | `backup-alerts.yaml` | `BlockOneBackupStale` (more than 26 h since either CronJob last succeeded), `BlockOneBackupNeverSucceeded` (same, before a first success, when the metric doesn't exist yet), `BlockOneBackupJobFailed` (a run failed after its retry; shown for 24 h) |
+| Secrets | overlay `blockone-backup-secret.yaml.example`, `blockone-backup-mirror-secret.yaml.example` | R2 endpoint, bucket, token and the obscured crypt passwords; SOPS-encrypted once filled in |
+| Restore | overlay `restore.yaml` (a Job) and a commented scale-to-zero patch in `kustomization.yaml` | run through Git, below |
+
+- **Encryption: rclone's `crypt` remote**, layered on an S3 remote for R2, configured only by environment variables (`RCLONE_CONFIG_<REMOTE>_<OPTION>`), so there is no config file to mount or leak. File names, folder names and contents are encrypted (XSalsa20-Poly1305: a changed byte fails to decrypt, it can't restore wrong data). R2 and pisrv01 only ever hold ciphertext. The two crypt passwords are the only way back in: they live in the password manager as well as in the SOPS Secrets.
+- **Two R2 tokens.** The nightly upload has Object Read & Write on the one bucket; the mirror and the restore Job use a second token with Object Read only.
+- **Copy, not sync, to pisrv01.** If the bucket is emptied (a leaked key, a mistake), a sync would empty the second copy too. The mirror uses `rclone copy --immutable`: new objects come down, nothing is deleted because R2 deleted it, and an object that changed in R2 (tampering, corruption) fails the run instead of overwriting the good copy. Retention on pisrv01 is by age on its own.
+- **Retention by `rclone delete --min-age 35d`, not an R2 lifecycle rule.** It's in Git and was tested, and it only runs after that night's upload succeeded, so backups that stop don't quietly age out. (A lifecycle rule would delete old backups even while new ones fail.)
+- **Everything in the case-files volume is backed up**, including the per-case caches: the engine's "cached answers only" steps read them, so they are part of a reproducible result. Only a restore's set-aside copies (`.pre-restore-*`, `.restoring-*`) are skipped. The engine's SQLite files are read while the app runs; GNU tar fails the run if any file changes while it is read, so a job running at 03:30 shows up as a failed backup (and an alert), not a torn copy.
+- **Same security settings as the app:** uid 10001 (the app's, so every case file is readable), read-only root filesystems, all capabilities dropped, `RuntimeDefault` seccomp, no service account token, `emptyDir`s for `/tmp` and the work files. Images: the app's `postgres:18.6-trixie` and `rclone/rclone:1.76.0`, both pinned by tag and digest, both amd64 and arm64.
+- **Network:** the backup pod reaches PostgreSQL, DNS and HTTPS on public addresses; the mirror only DNS and HTTPS. PostgreSQL accepts the backup pod's label (`app: blockone-backup`) as well as `blockone-db-client`.
+- **Time zone:** the CronJobs run on Los Angeles time; folder and file names use UTC (`2026/11/12/blockone-db-20261112T113000Z.dump`).
+
+### Owner steps (once)
+
+1. **R2 bucket** (Cloudflare dashboard, R2 Object Storage): create bucket `blockone-backups` (any name; location Automatic, Standard storage class). Leave public access off.
+2. **Two API tokens** (R2, Manage API tokens, Create API token), each "Apply to specific buckets only" → the bucket:
+   - `blockone-backup-rw`: **Object Read & Write**.
+   - `blockone-backup-ro`: **Object Read only**.
+   Copy each token's **Access Key ID** and **Secret Access Key** (shown once), and the S3 endpoint `https://<account id>.r2.cloudflarestorage.com`.
+3. *Optional, recommended:* R2 bucket settings, **Bucket lock rules**: a rule on prefix `blockone/` keeping objects for 30 days. Then even the read-and-write token can't delete a backup younger than 30 days; the job's own retention (35 days) is unaffected. Not tested here (the test used MinIO).
+4. **Crypt passwords and the Secrets.** From the repo root, with `sops` and `docker` (or a local `rclone`). Values go straight from variables into the SOPS-encrypted files:
+
+   ```bash
+   cd apps/staging/blockone-crypto-tax
+   umask 077
+   # Two random passwords. Save BOTH in the password manager now, as "BlockOne backups: crypt password" and
+   # "BlockOne backups: crypt salt". Without them, no backup can ever be decrypted.
+   CRYPT_PW=$(openssl rand -base64 48 | tr -d '\n'); CRYPT_SALT=$(openssl rand -base64 48 | tr -d '\n')
+   printf '%s\n%s\n' "$CRYPT_PW" "$CRYPT_SALT"     # copy into the password manager, then clear the screen
+   obscure() { printf '%s' "$1" | docker run --rm -i rclone/rclone:1.76.0 obscure -; }   # stdin, not argv
+   O1=$(obscure "$CRYPT_PW"); O2=$(obscure "$CRYPT_SALT")
+
+   read -rp 'R2 account id: ' R2_ACCOUNT; read -rp 'Bucket: ' R2_BUCKET
+   read -rp 'RW Access Key ID: ' RW_ID; read -rsp 'RW Secret Access Key: ' RW_SECRET; echo
+   read -rp 'RO Access Key ID: ' RO_ID; read -rsp 'RO Secret Access Key: ' RO_SECRET; echo
+   mk() {  # <secret name> <key id> <secret key> <file>
+     local envfile; envfile=$(mktemp)
+     {
+       printf 'R2_ENDPOINT=https://%s.r2.cloudflarestorage.com\n' "$R2_ACCOUNT"
+       printf 'R2_BUCKET=%s\n' "$R2_BUCKET"
+       printf 'R2_ACCESS_KEY_ID=%s\n' "$2"
+       printf 'R2_SECRET_ACCESS_KEY=%s\n' "$3"
+       printf 'RCLONE_CRYPT_PASSWORD=%s\n' "$O1"
+       printf 'RCLONE_CRYPT_PASSWORD2=%s\n' "$O2"
+     } > "$envfile"
+     kubectl create secret generic "$1" --from-env-file="$envfile" --dry-run=client -o yaml > "$4"
+     shred -u "$envfile"
+     sops -e -i "$4"
+   }
+   mk blockone-backup "$RW_ID" "$RW_SECRET" blockone-backup-secret.yaml
+   mk blockone-backup-mirror "$RO_ID" "$RO_SECRET" blockone-backup-mirror-secret.yaml
+   unset CRYPT_PW CRYPT_SALT O1 O2 RW_SECRET RO_SECRET
+   grep -c 'ENC\[' blockone-backup-secret.yaml blockone-backup-mirror-secret.yaml   # 7 each: 6 values + the MAC
+   ```
+
+5. Uncomment the two `blockone-backup*-secret.yaml` lines in `kustomization.yaml`, run `./scripts/validate.sh`, commit, and merge the branch.
+6. **First run, without waiting for the night** (read-only checks plus one Job created from the CronJob; this is a one-off exception to "change Git, not the cluster", or simply wait until 04:30):
+
+   ```bash
+   kubectl --context homelab -n blockone-crypto-tax create job --from=cronjob/blockone-backup backup-first
+   kubectl --context homelab -n blockone-crypto-tax logs -f job/backup-first --all-containers
+   kubectl --context homelab -n blockone-crypto-tax create job --from=cronjob/blockone-backup-mirror mirror-first
+   kubectl --context homelab -n blockone-crypto-tax logs -f job/mirror-first -c verify   # "OK: database dump lists ..."
+   ```
+
+   In the R2 dashboard the bucket should show only `blockone/<random>/<random>/...` names.
+
+Until steps 4–5 are done, the backup pods can't start (`CreateContainerConfigError`), each run fails at its 45-minute deadline, and the alerts fire after 26 hours. Alertmanager has no receivers yet (`docs/status.md`, Next), so alerts show in Prometheus and Alertmanager, not as notifications.
+
+### Restore
+
+Everything here also works from the workstation, which is the way in if the cluster itself is gone. Install rclone 1.76 (`mise use -g rclone@1.76.0`, or the distribution's package) and a PostgreSQL 18 client (or use `docker run --rm -i postgres:18.6-trixie pg_restore --list < file`) and set the remotes from the password manager, in a shell that writes nothing to disk:
+
+```bash
+export RCLONE_CONFIG=/dev/null   # env-only configuration, like the CronJobs
+export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+export RCLONE_CONFIG_R2_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+read -rp 'RO Access Key ID: ' RCLONE_CONFIG_R2_ACCESS_KEY_ID; export RCLONE_CONFIG_R2_ACCESS_KEY_ID
+read -rsp 'RO Secret Access Key: ' RCLONE_CONFIG_R2_SECRET_ACCESS_KEY; echo; export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+export RCLONE_CONFIG_BACKUP_TYPE=crypt RCLONE_CONFIG_BACKUP_REMOTE=r2:<bucket>/blockone
+export RCLONE_CONFIG_BACKUP_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_BACKUP_DIRECTORY_NAME_ENCRYPTION=true
+read -rsp 'Crypt password: ' p; echo; RCLONE_CONFIG_BACKUP_PASSWORD=$(printf '%s' "$p" | rclone obscure -)
+read -rsp 'Crypt salt: ' p; echo; RCLONE_CONFIG_BACKUP_PASSWORD2=$(printf '%s' "$p" | rclone obscure -); unset p
+export RCLONE_CONFIG_BACKUP_PASSWORD RCLONE_CONFIG_BACKUP_PASSWORD2
+
+rclone lsl backup:                                   # every backup, with decrypted names
+mkdir -m 700 ~/blockone-restore
+rclone copy backup:2026/11/12 ~/blockone-restore --include '*20261112T113000Z*'
+pg_restore --list ~/blockone-restore/blockone-db-20261112T113000Z.dump | grep 'TABLE DATA'
+tar -tzvf ~/blockone-restore/blockone-data-20261112T113000Z.tar.gz | head
+```
+
+If R2 is lost too, the same ciphertext is on pisrv01 under `/var/lib/rancher/k3s/storage/<pv>_blockone-crypto-tax_blockone-backup-mirror/blockone`: copy that folder to the workstation and set `RCLONE_CONFIG_BACKUP_REMOTE=/path/to/that/blockone` instead of `r2:...` (and `rclone copy` it back into a bucket for the restore Job). Delete `~/blockone-restore` when done: it is client data in plain form.
+
+**Putting a backup back (through Git).** The Job `restore.yaml` downloads and decrypts one backup with the read-only token, checks both files, restores the database with `pg_restore --clean --if-exists --single-transaction` (all or nothing), unpacks the case files next to the live ones and then swaps them in, keeping the old ones in `/data/.pre-restore-<time>`.
+
+1. **Stop the app.** On a branch, uncomment the `patches:` block (replicas 0 for `blockone-api` and `blockone-worker`) in `apps/staging/blockone-crypto-tax/kustomization.yaml`; validate, commit, merge. Wait until `kubectl --context homelab -n blockone-crypto-tax get pods` shows neither (the worker may take up to 5 minutes to finish a job).
+2. **Run the restore.** Set `BACKUP` in `restore.yaml` to the stamp from the file names (e.g. `20261112T113000Z`), uncomment `- restore.yaml`, commit, merge. Follow it with `kubectl --context homelab -n blockone-crypto-tax logs -f job/blockone-restore --all-containers`: "database restored", then "case files restored; the previous ones are in ...". If it fails, nothing is half-done: the files are checked first, the database restore is one transaction, and the case files are swapped only after they unpacked.
+3. **Check** (read-only): `kubectl --context homelab -n blockone-crypto-tax exec blockone-postgres-0 -- psql -U blockone -d blockone -c '\dt+'` and the row counts you expect.
+4. **Start the app again.** Comment out `- restore.yaml` and the `patches:` block, commit, merge. Flux prunes the Job and scales the API and worker back to 1; their `migrate` initContainers bring the schema up to date if the backup is from an older release. Sign in and open a case.
+5. Once satisfied, remove the set-aside files: `kubectl --context homelab -n blockone-crypto-tax exec deploy/blockone-worker -- rm -rf /data/.pre-restore-<time>`.
+
+If minisrv01's disk is lost, the PVCs point at volumes that no longer exist. Deleting them (and their PVs) so Flux and the StatefulSet create new ones is a cluster change outside Git: ask first. Then follow the steps above. Completed backup pods keep `blockone-data` in use (`kubernetes.io/pvc-protection`), so delete the finished backup Jobs before deleting that PVC.
+
+### How it was tested
+
+Drilled on 2026-11-11 in a throwaway kind cluster (Kubernetes 1.37, three nodes; kind's node names patched in for minisrv01 and pisrv01; MinIO, the `pgsty/minio` build, standing in for R2 over plain HTTP; the namespace's restricted Pod Security level and NetworkPolicies enforced), with the manifests from this branch. The cluster was deleted afterwards. Not yet tried against real R2 or on the homelab.
+
+| Check | Result |
+|---|---|
+| Backup Job from the CronJob, PostgreSQL with 500 rows, case files owned by uid 10001 with mode 0600 | passed; dump checked, archive checked, `cryptcheck` 0 differences |
+| Objects in the bucket | names like `blockone/svgaaq.../7me37l...`, every object starts with rclone's `RCLONE\0\0` header; no table names, markers, `PGDMP` or gzip signature found in the raw bytes |
+| Mirror Job (other node) | copied, decrypted, `pg_restore --list` 2 tables with data, archive 12 entries |
+| Changed byte in an R2 object, decrypted (run before `--immutable` was added; the same check covers an object the mirror downloads for the first time) | decrypt failed: "failed to authenticate decrypted block"; Job Failed |
+| Changed byte in R2 after the mirror had a good copy | `immutable file modified`; Job Failed, good local copy kept |
+| Valid encryption, garbage dump inside | `pg_restore: error: input file does not appear to be a valid tar archive`; Job Failed |
+| Bucket emptied | mirror run still succeeded from its own copy; nothing deleted on pisrv01 |
+| Object older than 35 days | deleted by the mirror (local) and by the backup (R2) |
+| PostgreSQL down | `pg_dump` failed, Job Failed, nothing uploaded |
+| Pod with the mirror's label to PostgreSQL | refused; the backup's label accepted |
+| Full restore: database and case-files volumes deleted, fresh ones created, `restore.yaml` run | 500 rows, same `sum(id)` and `md5` of every row as before; every case file the same SHA-256, owner and mode |
+| Workstation download + decrypt with the env-only config above | passed (dump and archive listed) |
+| Alert rules | `promtool test rules`: each alert fires when it should (26 h, never succeeded, failed job) and not before; a failed Renovate job doesn't trigger it |
+
+The first restore attempt found a bug, fixed before the passing run: tar can't change the mode of the volume's root (owned by root), so unpacking straight into `/data` failed after the files had already been moved aside. The Job now unpacks into a folder first and swaps afterwards.
 
 ## Owner checklist
 
@@ -188,7 +336,7 @@ When something's wrong: `kubectl -n blockone-crypto-tax describe pod <pod>` show
 
 ## Open items
 
-- **Backups.** PostgreSQL and the case files sit on minisrv01's disk only (`Retain` keeps them if the PVC goes, not if the disk dies). Before real client data: a nightly `pg_dump` CronJob and a copy of `blockone-data` off the node, or CloudNativePG with object-storage backups.
+- **Backups** are built (branch `feat/blockone-backups`, "Backups and restore"): nightly logical dumps, so up to a day of data can be lost. Point-in-time restore would need WAL archiving (CloudNativePG with object storage, or pgBackRest); revisit with real client data. A first real restore drill on the homelab is still to do once the backups run.
 - **Egress by hostname** (egress proxy or Cilium, above).
 - **Image updates.** Renovate's kustomize manager can follow `images:` digests, but a new `sha-<commit>` tag isn't a version it can order. For now the tag and digest are bumped by hand after each app release; tagging the app repo with `v*.*.*` versions would let Renovate open those PRs.
 - **CI minutes.** The image workflow uses GitHub's hosted runner (arm64 under QEMU) on each push to `main`. If minutes run short, add the repo to the self-hosted runners (`docs/github-runners.md`) or build arm64 natively.

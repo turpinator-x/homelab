@@ -14,6 +14,7 @@ _Last updated: 2026-11-11_
 | Audiobookshelf | `apps/*/audiobookshelf` | public, own tunnel, pinned to minisrv01 (local-path volumes) |
 | Dashboard | `apps/*/dashboard` | image from `homelab-dashboard` repo (GHCR), NetworkPolicy, no SA token |
 | Model platform | `apps/*/llm` | llama.cpp on CPU on both nodes behind an agentgateway gateway: API keys, per-key limits, failover, metrics including time to first token, alerts. Phases 1 and 2 of 4 |
+| BlockOne Crypto Tax | `apps/*/blockone-crypto-tax` | tester app (API, worker, PostgreSQL) behind its own tunnel and Cloudflare Access; own `blockone-crypto-tax` Kustomization; deployed 2026-11-11 (PR #32). Backups on a branch (Next) |
 | Homepage | `apps/*/homepage` | LAN only, Ingress-annotation discovery, read-only ClusterRole |
 | Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 14 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
@@ -24,7 +25,7 @@ _Last updated: 2026-11-11_
 
 ## Next
 
-0. **In progress:** BlockOne Crypto Tax tester app (`apps/*/blockone-crypto-tax`, own `blockone-crypto-tax` Kustomization): API, worker and PostgreSQL behind its own tunnel and Cloudflare Access. Built on branch `feat/blockone-crypto-tax`; waits for the first image, the SOPS Secrets and the Access application. Image digest is a placeholder until then. See `docs/blockone-crypto-tax.md`.
+0. **In progress:** nightly encrypted backups for the BlockOne Crypto Tax app (branch `feat/blockone-backups`): `blockone-backup` (pg_dump + case files, rclone crypt, to R2) and `blockone-backup-mirror` (copy to pisrv01, decrypt and check last night's), 35 days each, alerts, a Git-run restore Job. Drilled end to end in kind with MinIO; waits for the R2 bucket, two tokens and the two SOPS Secrets. See `docs/blockone-crypto-tax.md`, "Backups and restore".
 0. **In progress:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization). Built on branch `feat/arc-runners`; waits for the GitHub App credentials, then a repo-by-repo switch. See `docs/github-runners.md`.
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Alertmanager receivers, Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
@@ -40,4 +41,5 @@ _Last updated: 2026-11-11_
 
 - `npx renovate-config-validator` without a version pulls a stale cached v37 that rejects `managerFilePatterns`. Pin `renovate@<cluster version>`.
 - Moving a resource between Flux Kustomizations: `flux suspend` the old one first, or its prune deletes the resource.
+- Deleting a PVC that a CronJob's finished pods mounted: it stays `Terminating` (`pvc-protection`) until those Jobs are deleted.
 - Proton VPN's browser proxy breaks `*.home.arpa` hostnames; test LAN hosts with it off.
