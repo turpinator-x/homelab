@@ -51,7 +51,8 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 ## What's Next
 
 - [ ] Trusted LAN certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare)
-- [ ] Alertmanager receivers and an automated node upgrade process
+- [x] Alertmanager receiver (Telegram) for backup and critical alerts
+- [ ] An automated node upgrade process
 - [ ] A self-hosted model platform: a small model on CPU with a pinned, checked model file, metrics, a dashboard and alerts (phase 1) and a gateway with keys, limits and failover (phase 2) are running. Next: an SLO on time to first token, then a failure drill. See [docs/llm.md](docs/llm.md)
 - [ ] A Talos test cluster, then a three-control-plane rebuild
 - [ ] CKA certification
