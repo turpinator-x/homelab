@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main c71c6dd: feat(release): opt-in, expiring pre-launch auto-approve for promotions
+  # Built from the app repo's main fd05ebb: feat(bitcoin): Esplora chain reader for addresses and xpub wallets
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-c71c6dd3197288924f24c5c8d02982c9a66d382a
-    digest: sha256:75b4710731d7a62fcaff04b003da0f64f1602972ed493b332d7fed2a6f0771a6
+    newTag: sha-fd05ebbeb98206312c6277d31ff846a880f162a9
+    digest: sha256:c898221d20cb10df6a51a8e4218896b194a7221ade004da4fa0fdc2e06dbab2d
