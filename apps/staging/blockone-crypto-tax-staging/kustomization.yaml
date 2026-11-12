@@ -24,9 +24,9 @@ resources:
   - blockone-staging-keys-secret.yaml # generated: the tax id key (no real tax ids are ever stored here)
   # Owner steps (docs/blockone-crypto-tax-staging.md): uncomment each once its file exists. Until then the pods
   # wait in CreateContainerConfigError or ImagePullBackOff; production is unaffected.
-  # - blockone-app-secret.yaml        # Access team + this app's AUD tag, invited testers, the smoke service token
-  # - ghcr-pull-secret.yaml           # read:packages token to pull the private image
-  # - tunnel-credentials-secret.yaml  # the blockone-staging tunnel's credentials
+  - blockone-app-secret.yaml        # Access team + this app's AUD tag, invited testers, the smoke service token
+  - ghcr-pull-secret.yaml           # read:packages token to pull the private image
+  - tunnel-credentials-secret.yaml  # the blockone-staging tunnel's credentials
 configMapGenerator:
   - name: blockone-settings
     behavior: merge
