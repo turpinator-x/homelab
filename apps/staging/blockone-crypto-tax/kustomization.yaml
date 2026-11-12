@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 5311968: feat(prices): rank price sources and report disagreements per build
+  # Built from the app repo's main 4013e26: fix(prices): pair fills safely, roll back failed wallets, check pools against th
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-5311968edc91318408d73b78fb91eaedabebff52
-    digest: sha256:c5f80fbca757831995cfd2a405a093f08c09ddf0eac789e7a51221adf8c970b2
+    newTag: sha-4013e267f91e9a58dd4e9e206dac012bd12bf865
+    digest: sha256:cfb2bc153e0d02914f0868d581393b26dec5146fcb69567c647e7fd279d3f034
