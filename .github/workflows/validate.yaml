@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read # the PR's labels, read when the check runs (below)
 
 jobs:
   validate:
@@ -18,7 +19,20 @@ jobs:
           fetch-depth: 0 # check-staging-isolation.sh compares production's render with origin/main's
           persist-credentials: false
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
-      - run: ./scripts/validate.sh
+      # A PR may change production beyond its app image only when a maintainer labelled it "production-change".
+      # The labels are read now, not from the event payload: a label added just after the PR was opened (as the
+      # app's rollback script does) is then seen by this run, and the "labeled" event runs the check again.
+      - name: Production-change label
+        if: github.event_name == 'pull_request'
         env:
-          # a PR may change production's render (beyond its image) only when a maintainer labelled it
-          BLOCKONE_ALLOW_PROD_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'production-change') && '1' || '' }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          labels=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.labels[].name')
+          if grep -qx 'production-change' <<< "$labels"; then
+            echo "BLOCKONE_ALLOW_PROD_CHANGE=1" >> "$GITHUB_ENV"
+            echo "labelled production-change: production changes allowed"
+          fi
+      - run: ./scripts/validate.sh

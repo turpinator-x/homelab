@@ -3,10 +3,17 @@
 # by CI on every PR. Fails if:
 #   1. the staging build fails, or any staging object is cluster-scoped, outside blockone-staging, or mentions
 #      production's namespace name (blockone-crypto-tax) anywhere except in the image name;
-#   2. the staging Flux Kustomization doesn't point at the staging overlay with targetNamespace blockone-staging;
-#   3. production's FULL render (base included) differs from origin/main's beyond image lines, unless the change
-#      is meant: BLOCKONE_ALLOW_PROD_CHANGE=1 (CI sets it only for a PR labelled "production-change"). Image-only
-#      differences (the promotions' bumps, Renovate's pins) always pass and are listed.
+#      A staging NetworkPolicy may select another namespace only by its exact name (matchLabels on
+#      kubernetes.io/metadata.name, never production's): an empty namespaceSelector (every namespace) or
+#      matchExpressions (NotIn, DoesNotExist, ...) fail;
+#   2. the staging Flux Kustomization doesn't point at the staging overlay with targetNamespace blockone-staging,
+#      or production's (clusters/staging/blockone-crypto-tax.yaml) isn't still name blockone-crypto-tax, path
+#      ./apps/staging/blockone-crypto-tax, prune true and no targetNamespace;
+#   3. without BLOCKONE_ALLOW_PROD_CHANGE=1 (CI sets it only for a PR labelled "production-change"):
+#      production's FULL render (base included) differs from origin/main's beyond the app image
+#      (ghcr.io/turpinator-x/blockone-crypto-tax followed by : or @), or production's Flux Kustomization file or
+#      anything under infrastructure/configs (cluster-wide objects) differs from origin/main's at all.
+#      App-image-only differences (promotions) always pass and are listed.
 # origin/main must exist (CI checks out with fetch-depth 0): without it the production check can't run, so it fails.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -18,7 +25,7 @@ flux_ks=clusters/staging/blockone-staging.yaml
 
 render=$(kubectl kustomize "$stage") || { echo "staging isolation FAILED: kubectl kustomize $stage failed" >&2; exit 1; }
 python3 - "$render" <<'EOF'
-import sys, yaml
+import re, sys, yaml
 bad = []
 for d in yaml.safe_load_all(sys.argv[1]):
     if not d:
@@ -30,25 +37,46 @@ for d in yaml.safe_load_all(sys.argv[1]):
             bad.append(f"Namespace {name}")
     elif ns != "blockone-staging":
         bad.append(f"{kind} {name} in namespace {ns!r}")
-    text = yaml.safe_dump(d).replace("ghcr.io/turpinator-x/blockone-crypto-tax", "<image>")
+    text = re.sub(r"ghcr\.io/turpinator-x/blockone-crypto-tax[:@]", "<image>", yaml.safe_dump(d))
     if "blockone-crypto-tax" in text:
         bad.append(f"{kind} {name}: mentions production's namespace name (blockone-crypto-tax)")
+    if kind == "NetworkPolicy":
+        for rule in (d["spec"].get("ingress") or []) + (d["spec"].get("egress") or []):
+            for peer in (rule.get("from") or []) + (rule.get("to") or []):
+                if "namespaceSelector" not in peer:
+                    continue
+                sel = peer["namespaceSelector"] or {}
+                labels = sel.get("matchLabels") or {}
+                ns_name = labels.get("kubernetes.io/metadata.name")
+                if sel.get("matchExpressions") or not ns_name or set(labels) != {"kubernetes.io/metadata.name"}:
+                    bad.append(f"NetworkPolicy {name}: a namespaceSelector must name one namespace exactly ({sel!r})")
+                elif ns_name == "blockone-crypto-tax":
+                    bad.append(f"NetworkPolicy {name}: selects production's namespace")
 if bad:
     sys.exit("staging isolation FAILED:\n  " + "\n  ".join(bad))
 EOF
 
-python3 - "$flux_ks" <<'EOF'
+python3 - "$flux_ks" clusters/staging/blockone-crypto-tax.yaml <<'EOF'
 import sys, yaml
-d = yaml.safe_load(open(sys.argv[1]))
-spec = d.get("spec", {})
-want = {"path": "./apps/staging/blockone-crypto-tax-staging", "targetNamespace": "blockone-staging", "prune": True}
-bad = [f"{k}: {spec.get(k)!r}, want {v!r}" for k, v in want.items() if spec.get(k) != v]
-if d.get("metadata", {}).get("name") != "blockone-staging":
-    bad.append(f"name: {d.get('metadata', {}).get('name')!r}, want 'blockone-staging'")
+pins = {
+    sys.argv[1]: ("blockone-staging", {"path": "./apps/staging/blockone-crypto-tax-staging",
+                                       "targetNamespace": "blockone-staging", "prune": True}),
+    # production's: moving or renaming it, or adding a targetNamespace, would re-own or prune client data
+    sys.argv[2]: ("blockone-crypto-tax", {"path": "./apps/staging/blockone-crypto-tax", "targetNamespace": None,
+                                          "prune": True}),
+}
+bad = []
+for f, (name, want) in pins.items():
+    d = yaml.safe_load(open(f))
+    spec = d.get("spec", {})
+    bad += [f"{f}: {k}: {spec.get(k)!r}, want {v!r}" for k, v in want.items() if spec.get(k) != v]
+    if d.get("metadata", {}).get("name") != name:
+        bad.append(f"{f}: name: {d.get('metadata', {}).get('name')!r}, want {name!r}")
 if bad:
-    sys.exit(f"staging isolation FAILED: {sys.argv[1]}:\n  " + "\n  ".join(bad))
+    sys.exit("staging isolation FAILED:\n  " + "\n  ".join(bad))
 EOF
-echo "staging: every object is in blockone-staging, nothing mentions production, the Flux Kustomization is pinned"
+echo "staging: every object is in blockone-staging, nothing mentions production, no wide namespaceSelector;" \
+  "both Flux Kustomizations are pinned"
 
 git rev-parse -q --verify origin/main > /dev/null \
   || { echo "production check FAILED: no origin/main to compare with (CI: checkout with fetch-depth: 0)" >&2; exit 1; }
@@ -57,6 +85,21 @@ trap 'rm -rf "$tmp"' EXIT
 git archive origin/main apps/base apps/staging | tar -x -C "$tmp"
 kubectl kustomize "$tmp/$prod" > "$tmp/main.yaml" || { echo "production check FAILED: origin/main's render failed" >&2; exit 1; }
 kubectl kustomize "$prod" > "$tmp/here.yaml" || { echo "production check FAILED: kubectl kustomize $prod failed" >&2; exit 1; }
+# Production's Flux Kustomization and the cluster-wide configs: any difference at all needs the label
+changed_files=$(git diff --name-only origin/main -- clusters/staging/blockone-crypto-tax.yaml infrastructure/configs) \
+  || { echo "production check FAILED: git diff failed" >&2; exit 1; }
+untracked=$(git ls-files --others --exclude-standard -- clusters/staging/blockone-crypto-tax.yaml infrastructure/configs) \
+  || { echo "production check FAILED: git ls-files failed" >&2; exit 1; }
+changed_files=$(printf '%s\n%s\n' "$changed_files" "$untracked" | sed '/^$/d')
+if [ -n "$changed_files" ]; then
+  echo "changed against origin/main (production's Flux Kustomization / cluster-wide configs):" >&2
+  while IFS= read -r f; do echo "  $f" >&2; done <<< "$changed_files"
+  if [ "${BLOCKONE_ALLOW_PROD_CHANGE:-}" != 1 ]; then
+    echo "production check FAILED: label the PR 'production-change' (CI) or set BLOCKONE_ALLOW_PROD_CHANGE=1" >&2
+    exit 1
+  fi
+  echo "production change allowed (BLOCKONE_ALLOW_PROD_CHANGE=1)"
+fi
 python3 - "$tmp/main.yaml" "$tmp/here.yaml" <<'EOF'
 import difflib, os, re, sys, yaml
 def docs(p):
@@ -69,7 +112,7 @@ def docs(p):
 def dump(d):
     return yaml.safe_dump(d, sort_keys=True)
 def strip_images(d):
-    return re.sub(r"(?m)^(\s*(?:-\s+)?image:\s*)ghcr\.io/turpinator-x/blockone-crypto-tax\S*$", r"\1<app image>", dump(d))
+    return re.sub(r"(?m)^(\s*(?:-\s+)?image:\s*)ghcr\.io/turpinator-x/blockone-crypto-tax[:@]\S*$", r"\1<app image>", dump(d))
 a, b = docs(sys.argv[1]), docs(sys.argv[2])
 changed, images = [], []
 for k in sorted(set(a) | set(b)):
