@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main c71c6dd: Merge pull request #49 from turpinator-x/feat/prelaunch-auto-approve
+  # Built from the app repo's main fd05ebb: Merge pull request #48 from turpinator-x/feat/bitcoin-reader
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-c71c6dd3197288924f24c5c8d02982c9a66d382a
-    digest: sha256:75b4710731d7a62fcaff04b003da0f64f1602972ed493b332d7fed2a6f0771a6
+    newTag: sha-fd05ebbeb98206312c6277d31ff846a880f162a9
+    digest: sha256:c898221d20cb10df6a51a8e4218896b194a7221ade004da4fa0fdc2e06dbab2d
