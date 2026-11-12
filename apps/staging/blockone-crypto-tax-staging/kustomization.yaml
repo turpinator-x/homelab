@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 238dc49: feat(web): wallet kinds and the FlareBank opening-lot step
+  # Built from the app repo's main c78e4da: feat: staging phase with smoke tests, gated promotion and rollback
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-238dc491b88f2496712149926394e34b7291193b
-    digest: sha256:42b59597021d28267e349358fdb69f2381229b41de9bc7675173fff272c6f9fd
+    newTag: sha-c78e4daa15207b92a7554cbc73465b595e30613e
+    digest: sha256:6a2e695989a151737a90af05d39768b17c3570a996e946e9b066359ee5d9e29f
