@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main bd877bb: fix(engine): one time zone decides every row's tax year; year-ends written once
+  # Built from the app repo's main 49ed7be: feat(sources): incremental chain reads, probe memory and skip-when-unchanged bui
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-bd877bb9c810d9e158863bd5d1a3e71f55f7f193
-    digest: sha256:18c9427e1e97c978c3be14193fe2f84d22484485cf33b1f7521fc2c517a441ab
+    newTag: sha-49ed7be9239fcd2d2d4f8398a9ea11ae1677be1c
+    digest: sha256:39bf50437c8a8043a28ccfcaf0548e204a474e336f0dbb5d9fb85a0ef384921d
