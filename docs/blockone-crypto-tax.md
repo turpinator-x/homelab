@@ -162,7 +162,7 @@ flowchart LR
 
    In the R2 dashboard the bucket should show only `blockone/<random>/<random>/...` names.
 
-Until steps 4–5 are done, the backup pods can't start (`CreateContainerConfigError`), each run fails at its 45-minute deadline, and the alerts fire after 26 hours. Alertmanager has no receivers yet (`docs/status.md`, Next), so alerts show in Prometheus and Alertmanager, not as notifications.
+Until steps 4–5 are done, the backup pods can't start (`CreateContainerConfigError`), each run fails at its 45-minute deadline, and the alerts fire after 26 hours. Alerts go to the owner's Telegram (`docs/monitoring.md`, "Alerting").
 
 ### Restore
 
@@ -261,33 +261,7 @@ Tested on 2026-11-12 with a stand-in `kubectl` (not on the cluster): the generat
 
 Gaps found (none changed here; proposals for the owner):
 
-0. **No alert receivers (the top production gap).** Every backup alert above fires only into Prometheus and Alertmanager's UI: a failed nightly or pre-deploy backup, or a failed drill, notifies nobody. Proposal, not applied (it changes `monitoring/`): an email receiver through Cloudflare Email Routing or any SMTP relay, as a HelmRelease values change plus a SOPS Secret for the SMTP password:
-
-   ```yaml
-   # monitoring/controllers/base/kube-prometheus-stack values (sketch)
-   alertmanager:
-     config:
-       route:
-         receiver: owner-email
-         group_by: [alertname, namespace]
-         routes:
-           - receiver: "null"
-             matchers: [alertname = Watchdog]
-       receivers:
-         - name: "null"
-         - name: owner-email
-           email_configs:
-             - to: <owner address>
-               from: alerts@jarrodturpin.dev
-               smarthost: <smtp host>:587
-               auth_username: <user>
-               auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
-               send_resolved: true
-     alertmanagerSpec:
-       secrets: [alertmanager-smtp]   # SOPS-encrypted Secret in monitoring, key "password"
-   ```
-
-   Then check it with a test alert (`amtool alert add test severity=critical` from the Alertmanager pod) before relying on it.
+0. **Alert receiver: done (2026-11-12).** Alertmanager sends every `BlockOneBackup*` alert (and any other `severity=critical` alert) to the owner's Telegram bot; see `docs/monitoring.md`, "Alerting". Not covered: a failed pre-deploy backup (`bk-predeploy-*`/`bkv-*`) stops `promote.sh` in the terminal instead, and the job-name pattern doesn't match it.
 1. **Plaintext on disk during the backup.** `blockone-backup`'s `work` `emptyDir` is disk-backed, so the unencrypted dump and tar are written to minisrv01's disk while the Job runs, until kubelet cleans up the finished pod's volumes. Proposal: `medium: Memory` with a size limit (the 2026-11-12 pair is 77 MiB) and a matching memory limit on the containers.
 2. **Bucket lock not confirmed.** Owner step 3 above (an R2 bucket lock rule on `blockone/`, 30 days) is optional; without it, the read-and-write token alone can empty the bucket (the pisrv01 copy survives). Proposal: set it and record that it's on.
 3. **One key opens everything.** The age private key decrypts the crypt passwords and both R2 tokens. Proposal: keep the age key and the crypt passwords offline as well (password manager), and consider a second age recipient held offline so a lost workstation isn't a lost key.

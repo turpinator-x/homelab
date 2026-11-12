@@ -77,4 +77,19 @@ At install (2026-10-20): all 18 targets up, including node-exporter on both node
 - Prometheus keeps its data in an `emptyDir`, so a restart loses metric history (retention is 10 days). A PersistentVolumeClaim via `prometheus.prometheusSpec.storageSpec` is the next step.
 - Prometheus and Alertmanager are still only reachable through `kubectl port-forward`.
 - Grafana also still answers on plain HTTP; redirecting to HTTPS is a Traefik middleware away.
-- Alertmanager has no receivers configured, so alerts aren't sent anywhere yet.
+- Only BlockOne backup alerts and `severity=critical` alerts notify (Telegram); warnings are visible in the Alertmanager UI only.
+
+## Alerting
+
+Alertmanager's config is in the HelmRelease values (`monitoring/controllers/base/kube-prometheus-stack/release.yaml`). One receiver, `telegram` (Alertmanager's native `telegram_configs`), posts to the owner's Telegram bot. The bot token and chat id are a SOPS Secret, `alertmanager-telegram` in the staging overlay, mounted by `alertmanagerSpec.secrets` and read with `bot_token_file` / `chat_id_file`, so neither appears in the rendered config.
+
+| Route | Receiver | Repeat |
+|---|---|---|
+| `Watchdog`, `InfoInhibitor` | `null` | |
+| `BlockOneBackup*` (any severity) | `telegram` | 24 h |
+| any other `severity=critical` | `telegram` | 12 h |
+| everything else (warnings, info) | `null` (UI only) | |
+
+Grouped by `alertname` and `namespace` (30 s wait, 5 min group interval), resolved notices on. Inhibitions: the chart's defaults (critical hides warning/info for the same alert and namespace, warning hides info), plus `BlockOneBackupStale` hides `BlockOneBackupJobFailed` while both fire. The config was checked with `amtool check-config` and `amtool config routes test` from the pinned Alertmanager image (v0.34.1).
+
+Test a notification: port-forward `svc/kube-prometheus-stack-alertmanager 9093` and POST an alert with `severity=critical` to `/api/v2/alerts`, then check `alertmanager_notifications_total{integration="telegram"}` rose and `alertmanager_notifications_failed_total{integration="telegram"}` didn't.

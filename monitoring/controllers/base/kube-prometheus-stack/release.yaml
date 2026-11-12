@@ -23,6 +23,58 @@ spec:
     grafana:
       admin:
         existingSecret: grafana-admin   # SOPS Secret in the staging overlay
+    alertmanager:
+      alertmanagerSpec:
+        # Mounted at /etc/alertmanager/secrets/alertmanager-telegram/ (SOPS Secret in the staging overlay)
+        secrets:
+          - alertmanager-telegram
+      config:
+        global:
+          resolve_timeout: 5m
+        route:
+          receiver: "null"
+          group_by: [alertname, namespace]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+          routes:
+            # Heartbeat and the inhibitor helper: never notify
+            - receiver: "null"
+              matchers:
+                - alertname =~ "Watchdog|InfoInhibitor"
+            # BlockOne backups (apps/base/blockone-crypto-tax/backup-alerts.yaml): every severity
+            - receiver: telegram
+              matchers:
+                - alertname =~ "BlockOneBackup.*"
+              repeat_interval: 24h
+            # Any other critical alert; warnings stay in the Alertmanager UI only
+            - receiver: telegram
+              matchers:
+                - severity = "critical"
+        inhibit_rules:
+          - source_matchers: [severity = "critical"]
+            target_matchers: [severity =~ "warning|info"]
+            equal: [namespace, alertname]
+          - source_matchers: [severity = "warning"]
+            target_matchers: [severity = "info"]
+            equal: [namespace, alertname]
+          - source_matchers: [alertname = "InfoInhibitor"]
+            target_matchers: [severity = "info"]
+            equal: [namespace]
+          # A failed run will also go stale; while it's stale, the stale alert is enough
+          - source_matchers: [alertname = "BlockOneBackupStale"]
+            target_matchers: [alertname = "BlockOneBackupJobFailed"]
+            equal: [namespace]
+        receivers:
+          - name: "null"
+          - name: telegram
+            telegram_configs:
+              - bot_token_file: /etc/alertmanager/secrets/alertmanager-telegram/bot-token
+                chat_id_file: /etc/alertmanager/secrets/alertmanager-telegram/chat-id
+                parse_mode: HTML
+                send_resolved: true
+        templates:
+          - /etc/alertmanager/config/*.tmpl
     # k3s runs these inside one process with metrics on 127.0.0.1, and uses SQLite, not etcd
     kubeControllerManager:
       enabled: false
