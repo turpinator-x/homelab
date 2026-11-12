@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 467ecec: feat(sources): read FlareBank (BANK) as a protocol and correct its opening lots
+  # Built from the app repo's main 2333677: feat(basis): missing cost basis investigator (CLI, Reports page, worker job)
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-467ecec8af66ea13297da6295e07f2d6e3c9445c
-    digest: sha256:97b0ec2d3a34ded2a06da21e29e8079d10fbc51a27943a8d7857f31cd143585c
+    newTag: sha-233367768472e9bb02c778c6f1b7d049f78fedd8
+    digest: sha256:02ee4067e9f579264122d0d8fc6b468d50b12b6c38699c3e9fd87b4f6c2bdf27
