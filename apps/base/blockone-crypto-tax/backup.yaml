@@ -54,6 +54,13 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   date -u +%Y/%m/%d > /work/day
                   echo "$stamp" > /work/stamp
+                  # A new pod's NetworkPolicy allow rules take a few seconds to reach the node (kube-router): until
+                  # then Postgres refuses the connection. Wait for it (up to 2 minutes), then fail loudly.
+                  for i in $(seq 1 60); do
+                    if pg_isready -q -h blockone-postgres -U blockone -d blockone; then break; fi
+                    if [ "$i" -eq 60 ]; then echo "Postgres not reachable after 120s" >&2; exit 1; fi
+                    sleep 2
+                  done
                   pg_dump -h blockone-postgres -U blockone -d blockone -Fc -f "/work/blockone-db-$stamp.dump.partial"
                   pg_restore --list "/work/blockone-db-$stamp.dump.partial" > /dev/null # readable before it's kept
                   mv "/work/blockone-db-$stamp.dump.partial" "/work/blockone-db-$stamp.dump"
