@@ -26,7 +26,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 2d43e03: feat(web): per-taxpayer Settings with year ranges and locked years
+  # Built from the app repo's main 467ecec: feat(sources): read FlareBank (BANK) as a protocol and correct its opening lots
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-2d43e03a2813b8a804057c7acf592df007cb0686
-    digest: sha256:8006fcb47e5e354efd8eb883072f2a9c7ba46ba2ab095a282854b2ea97375635
+    newTag: sha-467ecec8af66ea13297da6295e07f2d6e3c9445c
+    digest: sha256:97b0ec2d3a34ded2a06da21e29e8079d10fbc51a27943a8d7857f31cd143585c
