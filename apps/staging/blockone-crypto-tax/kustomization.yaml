@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 0d9c3b0: Merge pull request #57 from turpinator-x/fix/direct-transfer-rounding
+  # Built from the app repo's main 9da5a17: Merge pull request #58 from turpinator-x/fix/pairing-and-checks
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-0d9c3b0fc28f059b129a2e948285a3c62e383fe5
-    digest: sha256:1fd712f1c9dceaf112f9314eb7a59ed7037eaa3f36dd2452822d7fd6bf60871f
+    newTag: sha-9da5a171d23d14de8b650ef445828c85ebae3ed3
+    digest: sha256:918cf9b6b794171b5c9992bd608f35a63f9aefb22fe5faea418944be312d0a64
