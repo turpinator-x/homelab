@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 03fe090: feat(corrections): confirmation accuracy (evidence first, basis, owner-attested,
+  # Built from the app repo's main fbe8719: fix(release): harness tracks the migration head and runs offline; ignorable corr
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-03fe0901c2961fe8899525d416071e9a39354d31
-    digest: sha256:83eb949244b7e1e7b37f05cd0c02356b18cb14e028097b0b36c4eb0bacff4590
+    newTag: sha-fbe87192273a2c0e424a60348209127c5c345439
+    digest: sha256:e718c930f3b935474a32478464f2503eeaa42c7adf4476bdc19236b2f202dc9f
