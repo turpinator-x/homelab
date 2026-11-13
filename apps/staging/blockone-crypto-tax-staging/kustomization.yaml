@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main e8def00: fix(sources): Flare P-chain moves from atomic txs, missed token logs, swap rules
+  # Built from the app repo's main 0d9c3b0: fix(ledger): match an exchange's rounded deposit to Koinly's transfer
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-e8def002dc8ca29e62761e38a0cc47d3bfa8aedf
-    digest: sha256:44c0dbecfe97a1ae003c9a39b6345d03d3f5becd84ef70e0140b950055787146
+    newTag: sha-0d9c3b0fc28f059b129a2e948285a3c62e383fe5
+    digest: sha256:1fd712f1c9dceaf112f9314eb7a59ed7037eaa3f36dd2452822d7fd6bf60871f
