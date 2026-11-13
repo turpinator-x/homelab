@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 0eb5ba3: feat(reports): year package with error ledger, transfer pairing and versioned lo
+  # Built from the app repo's main 4ddf33f: feat(web): reviewer notes on taxpayer profiles
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-0eb5ba32c13fafcd531f4523f0c06506c89cb621
-    digest: sha256:e1372283f84c5b59557d79b110beb5fb0e713f515660a209286b20516492e388
+    newTag: sha-4ddf33f3bb1ebaee222fe151716e1d638e0d8764
+    digest: sha256:26664f2674171824039e038ac72dd0b4487372e3a404d6cf42247548b42c529c
