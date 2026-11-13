@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 1ebd411: Merge pull request #54 from turpinator-x/feat/notes-reset
+  # Built from the app repo's main 7765223: Merge pull request #55 from turpinator-x/feat/reset-keeps-locked-years
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-1ebd4112914bbdc2295a3f7edd9823533031032f
-    digest: sha256:0a3cdd55a0c9b5bb0ed452f4b6f359e9ad584fc9c993c6e0d982c343427e66a9
+    newTag: sha-77652239c10b8cffb48123515126acb597c5492b
+    digest: sha256:627e9468543c4dee4c07aaf2bdc7d57b99d1462ac1f2cbc25437146037094d86
