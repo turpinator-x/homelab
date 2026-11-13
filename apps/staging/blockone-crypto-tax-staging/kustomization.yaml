@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 1f0231a: feat(yearpkg): Checks page — checks registry, totals tie-out, single-source pric
+  # Built from the app repo's main e8def00: fix(sources): Flare P-chain moves from atomic txs, missed token logs, swap rules
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-1f0231ad98063ea2438f5f416e4d62404e1c268f
-    digest: sha256:950a9972e98c5f9363b568bfdee43e9643a07681c68e7787df84a35122a0ae17
+    newTag: sha-e8def002dc8ca29e62761e38a0cc47d3bfa8aedf
+    digest: sha256:44c0dbecfe97a1ae003c9a39b6345d03d3f5becd84ef70e0140b950055787146
