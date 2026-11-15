@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 60bf145: Merge pull request #61 from turpinator-x/feat/token-classification
+  # Built from the app repo's main 9a12d91: Merge pull request #62 from turpinator-x/fix/security-scan-offline
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-60bf1456f0384d105da4ed24d9b4e70912e0f6d0
-    digest: sha256:78e8129d7f981277910c69424d8178627002925efe72d908366ce5b0c18591c6
+    newTag: sha-9a12d9160eae520c459045364d05c6c7f36a52d3
+    digest: sha256:2c6f120a920138bbb790fee93cb004a094bf436682e966ea3960b119dd74daab
