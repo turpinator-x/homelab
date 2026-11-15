@@ -22,6 +22,7 @@ resources:
   # SOPS-encrypted Secrets. Made for staging only (never production's values):
   - blockone-db-secret.yaml           # generated: PostgreSQL password
   - blockone-staging-keys-secret.yaml # generated: the tax id key (no real tax ids are ever stored here)
+  - blockone-explorer-keys-secret.yaml # owner-made staging-only Alchemy key: wallet chain detection
   # Owner steps (docs/blockone-crypto-tax-staging.md): uncomment each once its file exists. Until then the pods
   # wait in CreateContainerConfigError or ImagePullBackOff; production is unaffected.
   - blockone-app-secret.yaml        # Access team + this app's AUD tag, invited testers, the smoke service token
