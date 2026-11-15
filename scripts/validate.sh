@@ -33,3 +33,6 @@ if git rev-parse -q --verify origin/main > /dev/null && git cat-file -e origin/m
 else
   ./scripts/check-staging-isolation.sh "$@"
 fi
+
+echo "== BlockOne key parity (production and staging carry the same explorer key names)"
+./scripts/check-blockone-key-parity.sh
