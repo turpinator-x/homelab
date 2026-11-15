@@ -120,7 +120,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 9a12d91: fix(security): offline scan never reports unread wallets as 0 approvals
+  # Built from the app repo's main e9e76f9: feat(sources): executor claims, per-method contract roles, registration burns, F
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-9a12d9160eae520c459045364d05c6c7f36a52d3
-    digest: sha256:2c6f120a920138bbb790fee93cb004a094bf436682e966ea3960b119dd74daab
+    newTag: sha-e9e76f9cd8fc8de43bb7a90806c21e8421aecd31
+    digest: sha256:3db4a9556a0c64822aee4fec594785fa61146d41c77ea46c8707191ed1e10ef3
