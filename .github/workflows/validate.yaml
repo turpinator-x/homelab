@@ -10,6 +10,11 @@ permissions:
   contents: read
   pull-requests: read # the PR's labels, read when the check runs (below)
 
+# A newer push to a pull request cancels that PR's older run (saves Actions minutes); every other event gets its own group (the run id), so runs on main are never cancelled.
+concurrency:
+  group: validate-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
     runs-on: ubuntu-26.04
