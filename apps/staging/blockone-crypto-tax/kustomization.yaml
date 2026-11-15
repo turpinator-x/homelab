@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main e9e76f9: Merge pull request #64 from turpinator-x/feat/executor-claims
+  # Built from the app repo's main e67d85b: Merge pull request #65 from turpinator-x/fix/wallet-chain-detection
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-e9e76f9cd8fc8de43bb7a90806c21e8421aecd31
-    digest: sha256:3db4a9556a0c64822aee4fec594785fa61146d41c77ea46c8707191ed1e10ef3
+    newTag: sha-e67d85b8430681bc5766e0e6be10d53db5337ed9
+    digest: sha256:42ad6a55122c96be831150a436715d0ae80213caeb6a13be31c9731526e21b43
