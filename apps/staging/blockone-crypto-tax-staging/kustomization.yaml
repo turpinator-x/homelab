@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 9067539: feat(ledger): value a move into an exchange at the exchange's own valuation
+  # Built from the app repo's main b07c300: fix: failed chain build never replaces the last complete one; bounded explorer r
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-906753968d00d172c0f476c353bbd0802cdbdb0b
-    digest: sha256:e1d8132cf1ea0ac4506d20503969727e831356632f32d35246b5cc3566391c3c
+    newTag: sha-b07c3001fe37b10695d786eccf9b1fdcca23a364
+    digest: sha256:a96fbc2dabd16aa9209b73f3198f71a66723165b23973d5fafea08b908f33afa
