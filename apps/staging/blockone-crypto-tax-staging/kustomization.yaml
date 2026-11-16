@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main b07c300: fix: failed chain build never replaces the last complete one; bounded explorer r
+  # Built from the app repo's main b9ee688: feat(sources): read EVM history from Alchemy first on every chain
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-b07c3001fe37b10695d786eccf9b1fdcca23a364
-    digest: sha256:a96fbc2dabd16aa9209b73f3198f71a66723165b23973d5fafea08b908f33afa
+    newTag: sha-b9ee6888008cd0ae3a5a8a1078bcfa841b45b8b7
+    digest: sha256:8747688a4577f457e1842945b66d6afef1210efc6ecc8d9703dde03339a6c2c4
