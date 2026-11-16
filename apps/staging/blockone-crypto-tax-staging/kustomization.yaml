@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 78196c3: fix: rebuild follow-ups (holdings check renames, PDA withdraw pairing, FlareDrop
+  # Built from the app repo's main 4e3a21f: feat(tokens): Alchemy's NFT spam flag as a cached signal; strong spam needs agre
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-78196c356652f217a42b0f11fb94cfe3415c9ff7
-    digest: sha256:eb4fc33022bcb20fb2f8acafcf380a2395b7c9f6fef21b2d1a7c1c9628a39af4
+    newTag: sha-4e3a21fad77c2badebe23744569c0b96a5611c42
+    digest: sha256:549712e96c946f9bfd0e5cc303974b3135e902a240d4973e8de5a0c5f9af4c1a
