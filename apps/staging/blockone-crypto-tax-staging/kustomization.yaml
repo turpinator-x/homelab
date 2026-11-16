@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 58b290e: feat(web): connect-an-exchange guides for 17 exchanges
+  # Built from the app repo's main 4bd41bc: feat(web): in-app sign-in with a password and a required authenticator code
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-58b290e3682fef56a3b001a6d50415a420eea82b
-    digest: sha256:167582ba352e0309f9a3dee511b0e6a71929489733e30b5bea70ebf055b7957a
+    newTag: sha-4bd41bc57585564bdc6415d1fe298bdd8a896558
+    digest: sha256:cf6022e7dd6b6d09d509cdbe17819e248f7b1a30d57ff6efcdaea3ada5ff3e3a
