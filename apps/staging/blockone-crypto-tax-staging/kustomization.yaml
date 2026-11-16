@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 5e300ef: feat: strict finalize gates, DRAFT/FINAL package status, finalize with exception
+  # Built from the app repo's main 5ef39db: test(e2e): lock the smoke year through the finalize gates
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-5e300ef8a1fcfe8bb2b7b2eed5861a95a79d5b4e
-    digest: sha256:89622891d9566f81684f88dd560e4b8d3edbbafc621bde7b57b1694ee7a4eff8
+    newTag: sha-5ef39db6db6dc245d686b4350d8487c5fc26b2b5
+    digest: sha256:4d37ba82d61dd72fb0ba1d91e51d0dc8ab31830eadbe50a791c8585e0c4b750a
