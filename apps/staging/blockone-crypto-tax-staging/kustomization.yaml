@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 9b8a8a0: feat(web): click-to-sign agreement gate (tester NDA + IP assignment, client ToS)
+  # Built from the app repo's main 784ed92: fix(sources): a failed EVM transaction moves no value, only its fee
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-9b8a8a0f40e0d4bd8d781653448b727c05403275
-    digest: sha256:58500d54c9cac48e5b56d0775f9a0f9b47d84c768efb0eb4f2112c13f89da493
+    newTag: sha-784ed929a34316634d23f26c88666e03d1b5a66b
+    digest: sha256:79b5ba3655318ed6ae368ae5e13bcbc7ca1aa2aea8c9b9a481e9b68fdb81363c
