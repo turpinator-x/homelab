@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main d8bbf7b: fix(web): agreement follow-ups (anchor re-baseline, export fallback, name-bound 
+  # Built from the app repo's main 32a7473: feat(yearpkg): NFT collectibles label per collection and a 28% rate line
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-d8bbf7b4aac9ed1e0f81b6bf64815b6d0d30408e
-    digest: sha256:e8fb90964ffb7e5618e688808073a3bcb1094941cab425666396d7975231e825
+    newTag: sha-32a7473bd15b1d5b3f560311be8d868334c94f82
+    digest: sha256:9cd8631f5e22653e5fddee384317774cc6996e3478d3b5ff3fa024bc530fc2ee
