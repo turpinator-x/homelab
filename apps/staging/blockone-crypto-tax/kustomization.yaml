@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main b9ee688: Merge pull request #67 from turpinator-x/feat/alchemy-one-key
+  # Built from the app repo's main 0976000: Merge pull request #71 from turpinator-x/fix/evm-balance-check-followups
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-b9ee6888008cd0ae3a5a8a1078bcfa841b45b8b7
-    digest: sha256:8747688a4577f457e1842945b66d6afef1210efc6ecc8d9703dde03339a6c2c4
+    newTag: sha-0976000ce314a72ec0e86f8c6c9d537f33bb5c76
+    digest: sha256:f1e9945cebbb36cc5fa2e9f21fbafd27d4a9a9adeea2cfcc6deaac17491d914e
