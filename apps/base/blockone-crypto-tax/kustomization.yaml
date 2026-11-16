@@ -16,6 +16,8 @@ configMapGenerator:
       - BLOCKONE_WEB_ENVIRONMENT=production
       - BLOCKONE_WEB_AUTH_MODE=cloudflare
       - BLOCKONE_WEB_DATA_ROOT=/data/cases
+      # Admin -> Agreements (who signed what, export, roles). Must be the Cloudflare Access sign-in email.
+      - BLOCKONE_WEB_ADMIN_EMAILS=jarrodturpin@blockoneglobal.com
       - NFTCB_DATA_DIR=/data/engine
       - HOME=/tmp
       # The API trusts X-Forwarded-* only from the pod network (k3s's default pod range), where cloudflared runs
