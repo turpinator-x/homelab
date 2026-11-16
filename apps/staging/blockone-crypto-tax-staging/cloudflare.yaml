@@ -2,6 +2,8 @@
 # hostname and its own Cloudflare Access application with an invite list of its own (owner steps:
 # docs/blockone-crypto-tax-staging.md). Access forwards a request only after signing the visitor in (or, for the
 # smoke tests, checking the staging service token), and the app checks Access's token again. One replica: staging.
+# Hostnames: crypto-tax-staging.jarrodturpin.dev (the original, kept until the owner switches over) and
+# staging.blockproof.tax, both on staging's own Access application (docs/blockone-crypto-tax-staging.md).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -79,6 +81,8 @@ data:
     no-autoupdate: true
     ingress:
       - hostname: crypto-tax-staging.jarrodturpin.dev
+        service: http://blockone-api:8000
+      - hostname: staging.blockproof.tax
         service: http://blockone-api:8000
       - service: http_status:404
 ---

@@ -2,6 +2,10 @@
 # Cloudflare only forwards a request after Access has signed the visitor in, and the app checks Access's token
 # again (BLOCKONE_WEB_AUTH_MODE=cloudflare). Same Deployment as the other tunnels, plus the restricted-level
 # security settings this namespace enforces.
+# Hostnames: crypto-tax.jarrodturpin.dev (the original) and app.blockproof.tax both reach the same app; the old one
+# stays until the owner switches over. blockproof.tax (the bare domain) is a static holding page
+# (holding-page.yaml). Each hostname needs its DNS record and Cloudflare Access cover (owner steps:
+# docs/blockone-crypto-tax.md, "blockproof.tax hostnames").
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -80,9 +84,14 @@ data:
     ingress:
       - hostname: crypto-tax.jarrodturpin.dev
         service: http://blockone-api:8000
+      - hostname: app.blockproof.tax
+        service: http://blockone-api:8000
+      - hostname: blockproof.tax
+        service: http://blockproof-holding:8080
       - service: http_status:404
 ---
-# cloudflared only dials out: to Cloudflare's edge (7844, TCP and UDP for QUIC; 443 for its API) and to the app.
+# cloudflared only dials out: to Cloudflare's edge (7844, TCP and UDP for QUIC; 443 for its API), to the app and to
+# the holding page.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -114,6 +123,13 @@ spec:
               app: blockone-api
       ports:
         - port: 8000
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app: blockproof-holding
+      ports:
+        - port: 8080
           protocol: TCP
     - to:
         - ipBlock:
