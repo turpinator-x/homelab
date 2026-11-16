@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 66473c9: fix: exclude look-alike impersonation tokens, keep sub-cent Kraken values, price
+  # Built from the app repo's main 13136f1: test: replace the owner's real addresses with made-up ones
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-66473c95a057b07d6f5de46dd52e547699f7a87d
-    digest: sha256:3a1967a5d07a7fe75f0007703e85a8e5149c642a585232a67744aba98bb3abb8
+    newTag: sha-13136f123bc49e47b1205c4b88bd5469e3ca3a1b
+    digest: sha256:81d85a6737be5112a7eadbefc6b73c9c8212683e10c286e70a81c732193886e1
