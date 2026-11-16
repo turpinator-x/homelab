@@ -32,7 +32,8 @@ flowchart LR
 | PostgreSQL 18 | `postgres.yaml` | StatefulSet, one replica, uid 999, read-only root, 2 Gi `local-path-retain` volume |
 | Case files | `storage.yaml` | 5 Gi `local-path-retain`, shared by API and worker |
 | NetworkPolicies | `networkpolicy.yaml`, overlay `cloudflare.yaml` | default deny, then per pod (below) |
-| Tunnel | `apps/staging/blockone-crypto-tax/cloudflare.yaml` | own tunnel `blockone-crypto-tax`, 2 replicas, like Linkding's |
+| Tunnel | `apps/staging/blockone-crypto-tax/cloudflare.yaml` | own tunnel `blockone-crypto-tax`, 2 replicas, like Linkding's; hostnames in "blockproof.tax hostnames" |
+| Holding page | overlay `holding-page.yaml` | static page for `blockproof.tax`, behind the same Access application |
 | Image pin | overlay `kustomization.yaml` (`images:`) | tag `sha-<commit>` plus digest; **placeholder until the first build** |
 | Secrets | overlay `*-secret.yaml.example` | templates only; real ones are SOPS-encrypted (checklist step 4) |
 | Flux | `clusters/staging/blockone-crypto-tax.yaml` | its own Kustomization, not part of `apps` |
@@ -268,6 +269,41 @@ Gaps found (none changed here; proposals for the owner):
 4. **Both off-site copies depend on one provider account for R2**, and the same account runs Access and the tunnels. Proposal (later, with more clients): a second off-site target outside Cloudflare.
 5. **Node disk encryption unknown.** Check whether minisrv01 and pisrv01 use full-disk encryption; if not, the live volumes and staging's data are readable from a stolen disk.
 
+## blockproof.tax hostnames (2026-11-16)
+
+The product is now called BlockProof, on its own domain, kept private while it's tested. Both tunnels carry the
+new hostnames next to the old ones; nothing is removed until the owner switches over.
+
+| Hostname | Tunnel | Goes to | Cloudflare Access application |
+|---|---|---|---|
+| `crypto-tax.jarrodturpin.dev` (old) | `blockone-crypto-tax` | `blockone-api` | `BlockOne Crypto Tax (tester)` |
+| `app.blockproof.tax` | `blockone-crypto-tax` | `blockone-api` | the same one, a second public hostname |
+| `blockproof.tax` | `blockone-crypto-tax` | `blockproof-holding` (static page) | the same one, a third public hostname |
+| `crypto-tax-staging.jarrodturpin.dev` (old) | `blockone-staging` | staging's `blockone-api` | `BlockOne Crypto Tax (STAGING)` |
+| `staging.blockproof.tax` | `blockone-staging` | staging's `blockone-api` | the same one, a second public hostname |
+
+- **Access: new hostnames on the existing applications, not a new application.** An Access application's AUD tag
+  is the same for all of its hostnames, so the app's `BLOCKONE_WEB_CF_AUD` and the Secrets don't change, and
+  staging keeps its own invite group and the only Service Auth policy for the smoke-test token (a single
+  application over production and staging would let that token, and staging's testers, past Access on
+  production too).
+- **The app needs no setting for a second hostname.** `BLOCKONE_WEB_PUBLIC_ORIGIN` isn't set here, so the
+  cross-site check compares a form's `Origin` with the request's `Host`, which cloudflared passes through
+  unchanged; cookies are host-only (`__Host-` prefix, Access's own per hostname), so each hostname signs in on
+  its own; `BLOCKONE_WEB_CORS_ORIGINS` is empty (no cross-origin callers). A form posted from one BlockProof
+  hostname to another is "same-site" to the browser, which the check refuses, as before.
+- **The holding page** (`holding-page.yaml`, files in `holding-page/`): nginx-unprivileged, read-only, one
+  replica, reachable only from cloudflared and able to reach nothing. It shows "BlockProof, private beta" and a
+  link to `app.blockproof.tax`, sends `noindex` and `no-store`, and holds no data. Its ConfigMap name carries a
+  content hash, so editing the page rolls the pod.
+- **DNS** is the owner's (the tunnels are locally managed, so cloudflared doesn't create records): proxied CNAMEs
+  to `<tunnel id>.cfargotunnel.com` in the `blockproof.tax` zone, made in the dashboard.
+  `cloudflared tunnel route dns` would put the record in the zone of the workstation's `cert.pem`
+  (`jarrodturpin.dev`), so it isn't used for this zone.
+- **Release scripts** (app repo `scripts/release/lib.sh`) keep checking the old hostnames until the switch.
+- **Switching over later:** point the release scripts at the new hostnames, then remove the old hostnames from
+  the tunnels' ingress and the Access applications, and delete their DNS records. Not part of this change.
+
 ## Owner checklist
 
 Do these on the branch, in order, then merge. Values below in `<angle brackets>` are yours to fill in; none of them go into Git unencrypted.
@@ -373,7 +409,7 @@ kubectl -n blockone-crypto-tax get pods -o wide        # api, worker, postgres-0
 kubectl -n blockone-crypto-tax logs deploy/blockone-api -c migrate      # Alembic ran (or had nothing to do)
 kubectl -n blockone-crypto-tax logs deploy/blockone-worker -c worker | head   # "worker ... started"
 kubectl -n blockone-crypto-tax logs deploy/cloudflared | grep "Registered tunnel connection"
-kubectl -n blockone-crypto-tax get networkpolicy        # default-deny, blockone-api, -worker, -postgres, cloudflared
+kubectl -n blockone-crypto-tax get networkpolicy        # default-deny, blockone-api, -worker, -postgres, cloudflared, blockproof-holding
 cloudflared tunnel info blockone-crypto-tax
 ```
 

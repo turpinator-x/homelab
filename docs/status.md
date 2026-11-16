@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-12_
+_Last updated: 2026-11-16_
 
 ## Running
 
@@ -29,6 +29,7 @@ _Last updated: 2026-11-12_
 
 0. **In progress:** nightly encrypted backups for the BlockOne Crypto Tax app (branch `feat/blockone-backups`): `blockone-backup` (pg_dump + case files, rclone crypt, to R2) and `blockone-backup-mirror` (copy to pisrv01, decrypt and check last night's), 35 days each, alerts, a Git-run restore Job. Drilled end to end in kind with MinIO; waits for the R2 bucket, two tokens and the two SOPS Secrets. See `docs/blockone-crypto-tax.md`, "Backups and restore".
 0. **In progress:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization). Built on branch `feat/arc-runners`; waits for the GitHub App credentials, then a repo-by-repo switch. See `docs/github-runners.md`.
+0. **Waiting on the owner (branch `feat/blockproof-hostnames`):** BlockProof hostnames `app.blockproof.tax`, `staging.blockproof.tax` and a private holding page on `blockproof.tax`, next to the old `jarrodturpin.dev` hostnames. Needs the `production-change` label, then DNS records and the new hostnames on the two existing Access applications (`docs/blockone-crypto-tax.md`, "blockproof.tax hostnames").
 0. **Waiting on the owner:** BlockOne staging (`docs/blockone-crypto-tax-staging.md`, owner steps: tunnel, Access application + invite group, service token, three Secrets), then the release flow in the app repo (`scripts/release/stage.sh`, `promote.sh`, `rollback.sh`). First restore drill on the homelab: `scripts/blockone-restore-drill.sh --fresh`. Backup gaps to decide: `docs/blockone-crypto-tax.md`, "Backup security review" (the Alertmanager receiver is done: Telegram, `docs/monitoring.md`). Create the `production-change` PR label (rollback PRs need it). Review the production restore Job change (whole-schema restore).
 1. LAN DNS + trusted certs: cert-manager with Let's Encrypt DNS-01 via Cloudflare.
 2. Stage 0 hardening: Pi SSD, system-upgrade-controller, External DNS, `docs/maintenance.md`.
