@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 9067539: Merge pull request #63 from turpinator-x/feat/exchange-value-on-arrival
+  # Built from the app repo's main b07c300: Merge pull request #68 from turpinator-x/fix/chain-build-atomic-retry
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-906753968d00d172c0f476c353bbd0802cdbdb0b
-    digest: sha256:e1d8132cf1ea0ac4506d20503969727e831356632f32d35246b5cc3566391c3c
+    newTag: sha-b07c3001fe37b10695d786eccf9b1fdcca23a364
+    digest: sha256:a96fbc2dabd16aa9209b73f3198f71a66723165b23973d5fafea08b908f33afa
