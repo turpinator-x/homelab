@@ -1,0 +1,112 @@
+# The private holding page for the bare domain blockproof.tax ("BlockProof, private beta"), until there is a real
+# site. Production's tunnel routes blockproof.tax here (cloudflare.yaml); Cloudflare Access signs the visitor in
+# first, like app.blockproof.tax. Static files from the ConfigMap made by kustomization.yaml (holding-page/), no
+# data, no app, no database: only cloudflared can reach it, and it reaches nothing.
+apiVersion: v1
+kind: Service
+metadata:
+  name: blockproof-holding
+  labels:
+    app: blockproof-holding
+spec:
+  selector:
+    app: blockproof-holding
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockproof-holding
+  labels:
+    app: blockproof-holding
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blockproof-holding
+  template:
+    metadata:
+      labels:
+        app: blockproof-holding
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101 # the image's nginx user
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.30.6-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
+          # nginx itself, not the image's entrypoint (its scripts try to rewrite files in a read-only image)
+          command: ["nginx", "-g", "daemon off;"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: site
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: site
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: site
+          configMap:
+            name: blockproof-holding # name gets a content hash (configMapGenerator): a change rolls the pod
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+# Only this namespace's cloudflared may connect, and only to the page's port. Nothing goes out (not even DNS).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockproof-holding
+spec:
+  podSelector:
+    matchLabels:
+      app: blockproof-holding
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - port: http
+  egress: []

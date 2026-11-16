@@ -4,6 +4,7 @@ namespace: blockone-crypto-tax
 resources:
   - ../../base/blockone-crypto-tax/
   - cloudflare.yaml
+  - holding-page.yaml # blockproof.tax's private holding page (files in holding-page/)
   # SOPS-encrypted Secrets (made from the .example files next to them; steps: docs/blockone-crypto-tax.md)
   - tunnel-credentials-secret.yaml
   - blockone-db-secret.yaml
@@ -20,6 +21,11 @@ resources:
   # SCHEMA DOWNGRADE ONLY (an app-only rollback across migrations; app repo scripts/release/rollback.sh):
   # listed with the scale-to-zero patch, then unlisted again.
   # - migrate-downgrade.yaml
+configMapGenerator:
+  - name: blockproof-holding
+    files:
+      - holding-page/nginx.conf
+      - holding-page/index.html
 # patches:
 #   # Stops the API and worker while a restore runs, so nothing writes to the database or case files
 #   - target: {kind: Deployment, name: "blockone-(api|worker)"}

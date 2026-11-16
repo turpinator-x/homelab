@@ -38,6 +38,10 @@ flowchart LR
 
 **No backups for staging.** It holds only synthetic demo taxpayers and whatever testers make from them, and all of it is wiped at every staging deploy. Its volumes use the `local-path` class (deleted with the claim) and have no "keep on prune" annotation, so removing staging removes all of it.
 
+Since 2026-11-16 staging also answers on `staging.blockproof.tax`, a second public hostname on the same tunnel
+and the same Access application (so the same invite group, service token and AUD tag). The old hostname stays
+until the owner switches over: `docs/blockone-crypto-tax.md`, "blockproof.tax hostnames".
+
 ## How staging is kept away from production
 
 - **Namespace.** Every object is in `blockone-staging`: the overlay's `namespace:` field, and Flux's `targetNamespace` as a second guard.
