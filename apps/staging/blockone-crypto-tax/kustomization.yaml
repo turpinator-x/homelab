@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 0830019: Merge pull request #92 from turpinator-x/fix/finalize-stripped-record
+  # Built from the app repo's main fc28df5: Merge pull request #91 from turpinator-x/feat/lock-attested-seed
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-083001981f01e621746b0e5b9366d27d703d489c
-    digest: sha256:b5b41a86ace6b8adec2c4a2480086efc68adaebc85feb3ea5f7fbf7d19b35a1d
+    newTag: sha-fc28df5c2a7ec68fdf935b01ce5d912e555c753b
+    digest: sha256:0ac393b929ba4348adc05213af896b012c4bf21ad4b8fa1d023f5b7f6e89695c
