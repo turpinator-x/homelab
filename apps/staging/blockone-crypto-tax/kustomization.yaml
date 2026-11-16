@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 9b8a8a0: Merge pull request #69 from turpinator-x/feat/agreement-gate
+  # Built from the app repo's main 784ed92: Merge pull request #74 from turpinator-x/fix/evm-failed-tx-value
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-9b8a8a0f40e0d4bd8d781653448b727c05403275
-    digest: sha256:58500d54c9cac48e5b56d0775f9a0f9b47d84c768efb0eb4f2112c13f89da493
+    newTag: sha-784ed929a34316634d23f26c88666e03d1b5a66b
+    digest: sha256:79b5ba3655318ed6ae368ae5e13bcbc7ca1aa2aea8c9b9a481e9b68fdb81363c
