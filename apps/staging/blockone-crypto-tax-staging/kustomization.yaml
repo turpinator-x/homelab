@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 27c2833: feat(web): privacy-preserving product metrics, admin dashboard and opt-out
+  # Built from the app repo's main 5e300ef: feat: strict finalize gates, DRAFT/FINAL package status, finalize with exception
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-27c2833e2e05495fa0e359252fabe86afffc258f
-    digest: sha256:5431faf4c3a9281da23d4740386ccc1a8d02550fb232db1bb042bf21def36c0f
+    newTag: sha-5e300ef8a1fcfe8bb2b7b2eed5861a95a79d5b4e
+    digest: sha256:89622891d9566f81684f88dd560e4b8d3edbbafc621bde7b57b1694ee7a4eff8
