@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 4224a9b: feat(xswap): match cross-chain swaps from a known router, one to one
+  # Built from the app repo's main 8697808: feat(import): read-only Kraken REST API importer with evidence-only accounts
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-4224a9b9a6dd7bf1f39736b9856410b3ffe56e0e
-    digest: sha256:398dbd68396f4421304b8a85b9b78ed6b0551c21f4a53775c8b3cbb886ee2148
+    newTag: sha-869780836fc87a161cf909a93d115e29647f9030
+    digest: sha256:22f972d73cb80d619dce69cece4a7c0fe09f4fa6104fa457519f1e9d4cbedbd3
