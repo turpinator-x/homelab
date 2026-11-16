@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 5844a06: Merge pull request #89 from turpinator-x/fix/nft-minority-collections
+  # Built from the app repo's main fc8da1f: Merge pull request #78 from turpinator-x/feat/feedback
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-5844a06b25da9d61c721062c28379a515d8f976c
-    digest: sha256:717693b8eb88f9cf5f9a1cefd9385641137cf353a01150785f8771d89ab8ffdd
+    newTag: sha-fc8da1f9b4266f8de86079a7e9334f69ce9054c8
+    digest: sha256:b0cfd30f26c2ae1a653414c6040b4a1d375d1196bae494d1d16c1d12362b6438
