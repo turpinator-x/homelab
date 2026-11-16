@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main fc28df5: feat(locks): lock a year that opens from an attested seed
+  # Built from the app repo's main 4e8ce43: test(web): freeze the clock in the reports page tests
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-fc28df5c2a7ec68fdf935b01ce5d912e555c753b
-    digest: sha256:0ac393b929ba4348adc05213af896b012c4bf21ad4b8fa1d023f5b7f6e89695c
+    newTag: sha-4e8ce4340e03f931f8b517d2819b99cb3c64fb1a
+    digest: sha256:ea75e54c615cdfbc03f87dbd5029c1bad7ee228f1f261a9e12216bf487a14923
