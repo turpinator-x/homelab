@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main fc8da1f: Merge pull request #78 from turpinator-x/feat/feedback
+  # Built from the app repo's main 27c2833: Merge pull request #80 from turpinator-x/feat/product-metrics
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-fc8da1f9b4266f8de86079a7e9334f69ce9054c8
-    digest: sha256:b0cfd30f26c2ae1a653414c6040b4a1d375d1196bae494d1d16c1d12362b6438
+    newTag: sha-27c2833e2e05495fa0e359252fabe86afffc258f
+    digest: sha256:5431faf4c3a9281da23d4740386ccc1a8d02550fb232db1bb042bf21def36c0f
