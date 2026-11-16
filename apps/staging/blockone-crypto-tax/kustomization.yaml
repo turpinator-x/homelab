@@ -29,7 +29,7 @@ resources:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 0976000: Merge pull request #71 from turpinator-x/fix/evm-balance-check-followups
+  # Built from the app repo's main 0cf288d: Merge pull request #70 from turpinator-x/feat/polygon-bridge-deposits
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-0976000ce314a72ec0e86f8c6c9d537f33bb5c76
-    digest: sha256:f1e9945cebbb36cc5fa2e9f21fbafd27d4a9a9adeea2cfcc6deaac17491d914e
+    newTag: sha-0cf288dadad0ffe05c12318f273a787d779b0703
+    digest: sha256:7453f03d2c2ff8de0c4e8f5c723ddc7f3205229dbb7b39616cffd124eb6769e2
