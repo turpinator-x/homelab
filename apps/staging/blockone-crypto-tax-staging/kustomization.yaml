@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 3f60847: feat(alchemy): Portfolio balance cross-check and Prices API as a ranked source
+  # Built from the app repo's main c2aec83: feat(exchanges): read-only API connector framework with Coinbase, OKX and Gemini
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-3f608473a0fdf8a9a469a69e4fab8a8978019fae
-    digest: sha256:686f2ba7ffe5177ca4f239bce863b1d30211cfcddf14ba78de249463b1f0c1e1
+    newTag: sha-c2aec8382dbe6300de8ec87cd0e4fea222133415
+    digest: sha256:b678005c105656653997bfb8c506d8d16c2712f23ee1d9f65b4b61ff80e4ab4f
