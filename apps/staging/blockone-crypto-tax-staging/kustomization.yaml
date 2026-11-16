@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 1547bf2: feat(providers): provider health, failover and automatic recovery
+  # Built from the app repo's main 3f60847: feat(alchemy): Portfolio balance cross-check and Prices API as a ranked source
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-1547bf26254c294af45853b5450fca76b097aec2
-    digest: sha256:8f9471baf34cefa5418b66c9a8da582d33e5e808b67ffbfd59f43f72eeaf3829
+    newTag: sha-3f608473a0fdf8a9a469a69e4fab8a8978019fae
+    digest: sha256:686f2ba7ffe5177ca4f239bce863b1d30211cfcddf14ba78de249463b1f0c1e1
