@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 13136f1: Merge pull request #112 from turpinator-x/chore/scrub-real-address
+  # Built from the app repo's main 1547bf2: Merge pull request #100 from turpinator-x/feat/provider-health
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-13136f123bc49e47b1205c4b88bd5469e3ca3a1b
-    digest: sha256:81d85a6737be5112a7eadbefc6b73c9c8212683e10c286e70a81c732193886e1
+    newTag: sha-1547bf26254c294af45853b5450fca76b097aec2
+    digest: sha256:8f9471baf34cefa5418b66c9a8da582d33e5e808b67ffbfd59f43f72eeaf3829
