@@ -43,9 +43,13 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           initContainers:
-            # 1. Dump the database in PostgreSQL's custom format (compressed; pg_restore can pick tables from it).
-            #    The .partial name means a dump that died halfway is never uploaded.
-            - name: dump
+            # 1. Tar the case files FIRST, then dump the database: the app's agreement anchor (on this volume)
+            #    must never be ahead of the database in a backup, or a restore shows a false tamper alarm
+            #    (app docs/agreements.md). Tar the whole case-files volume, read-only. Nothing is left out: the per-case caches feed the
+            #    "cached answers only" steps, so they are part of a reproducible result (only the copies a restore
+            #    set aside, .pre-restore-* and .restoring-*, are skipped). GNU tar exits 1 if a file changed
+            #    while it was read (a job writing at 03:30): the run fails and alerts rather than keep a torn copy.
+            - name: archive
               image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
               command: ["/bin/bash", "-c"]
               args:
@@ -54,6 +58,43 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   date -u +%Y/%m/%d > /work/day
                   echo "$stamp" > /work/stamp
+                  tar -C /data --exclude=./lost+found --exclude='./.pre-restore-*' --exclude='./.restoring-*' \
+                    -czf "/work/blockone-data-$stamp.tar.gz.partial" .
+                  tar -tzf "/work/blockone-data-$stamp.tar.gz.partial" > /dev/null
+                  mv "/work/blockone-data-$stamp.tar.gz.partial" "/work/blockone-data-$stamp.tar.gz"
+                  ls -l /work
+              env:
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+            # 2. Dump the database in PostgreSQL's custom format (compressed; pg_restore can pick tables from it).
+            #    The .partial name means a dump that died halfway is never uploaded.
+            - name: dump
+              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  stamp=$(cat /work/stamp)
                   # A new pod's NetworkPolicy allow rules take a few seconds to reach the node (kube-router): until
                   # then Postgres refuses the connection. Wait for it (up to 2 minutes), then fail loudly.
                   for i in $(seq 1 60); do
@@ -88,45 +129,6 @@ spec:
                   drop:
                     - ALL
               volumeMounts:
-                - name: work
-                  mountPath: /work
-                - name: tmp
-                  mountPath: /tmp
-            # 2. Tar the whole case-files volume, read-only. Nothing is left out: the per-case caches feed the
-            #    "cached answers only" steps, so they are part of a reproducible result (only the copies a restore
-            #    set aside, .pre-restore-* and .restoring-*, are skipped). GNU tar exits 1 if a file changed
-            #    while it was read (a job writing at 03:30): the run fails and alerts rather than keep a torn copy.
-            - name: archive
-              image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
-              command: ["/bin/bash", "-c"]
-              args:
-                - |
-                  set -euo pipefail
-                  stamp=$(cat /work/stamp)
-                  tar -C /data --exclude=./lost+found --exclude='./.pre-restore-*' --exclude='./.restoring-*' \
-                    -czf "/work/blockone-data-$stamp.tar.gz.partial" .
-                  tar -tzf "/work/blockone-data-$stamp.tar.gz.partial" > /dev/null
-                  mv "/work/blockone-data-$stamp.tar.gz.partial" "/work/blockone-data-$stamp.tar.gz"
-                  ls -l /work
-              env:
-                - name: HOME
-                  value: /tmp
-              resources:
-                requests:
-                  cpu: 20m
-                  memory: 32Mi
-                limits:
-                  memory: 128Mi
-              securityContext:
-                allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
-                capabilities:
-                  drop:
-                    - ALL
-              volumeMounts:
-                - name: data
-                  mountPath: /data
-                  readOnly: true
                 - name: work
                   mountPath: /work
                 - name: tmp
