@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 5593eed: fix: accept the entity types a later image writes (tolerant reader)
+  # Built from the app repo's main b644d53: feat: taxpayer entity types, one rule table, fund groundwork and instrument cate
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-5593eeda78c1f66b0127670bdf8a0f7c535021cf
-    digest: sha256:a39af9498df48a2796096a4e7c89bd113606edb076fe37c7406ac59beca7bd30
+    newTag: sha-b644d538a0c5d5df3bd61c6b9ca9b8a952166958
+    digest: sha256:9e1aa2c65e60e531e049ef7a7d08168c633c45a688b11ec5e372b7be8a6329a1
