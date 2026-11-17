@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 8697808: feat(import): read-only Kraken REST API importer with evidence-only accounts
+  # Built from the app repo's main 5593eed: fix: accept the entity types a later image writes (tolerant reader)
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-869780836fc87a161cf909a93d115e29647f9030
-    digest: sha256:22f972d73cb80d619dce69cece4a7c0fe09f4fa6104fa457519f1e9d4cbedbd3
+    newTag: sha-5593eeda78c1f66b0127670bdf8a0f7c535021cf
+    digest: sha256:a39af9498df48a2796096a4e7c89bd113606edb076fe37c7406ac59beca7bd30
