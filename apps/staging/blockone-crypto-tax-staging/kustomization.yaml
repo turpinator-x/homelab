@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 4ab1499: feat(regwatch): Regulatory Watch with official sources, rule-change records, rul
+  # Built from the app repo's main 5b20ec4: feat(web): client dashboard as a case's landing page, with audience layouts
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-4ab14991adefd452c3c38dc86262d6f4f6cb98df
-    digest: sha256:8497ecb3159b04d81fa79470cfc3e49cc8b819acbe030c13566603780e1564f1
+    newTag: sha-5b20ec4db6ccca72fcc4c54d856f14011e10a4ca
+    digest: sha256:d72ff259bcb76c76fdce0755addceb167bf529da6198c0b7a74f3606727e4f43
