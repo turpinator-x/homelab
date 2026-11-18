@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 70049d6: feat: price token-paid BANK lots and label the 1% transfer burn
+  # Built from the app repo's main 7fa1cb3: fix(flarebank): alias USD₮0 to USDT0 when pricing BANK lots paid in USDT0
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-70049d6b775ad454c740a660fa2ccb8ea2fd8283
-    digest: sha256:805be4bf9f598d1d6d089372274beb86f57ec3cc0981aeabee4335b772e4011f
+    newTag: sha-7fa1cb34277ef10886756592ec2a12e83dd3d656
+    digest: sha256:026fd28e5281b5a8d0b97d0638e2ef7c01e7d4bd58db26aa84af9701fd043348
