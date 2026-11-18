@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 7b3fefd: Merge pull request #105 from turpinator-x/feat/accounting-export
+  # Built from the app repo's main 16a5701: Merge pull request #115 from turpinator-x/ci/pytest-timeout-30
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-7b3fefde7a529c741d4eb47a95845723fd5f9caa
-    digest: sha256:747dc7236f8caa2dacdfcf1daf00eb33412a11201a0378c0e4415d68c8ae091e
+    newTag: sha-16a5701d7a481baae9d3fe89d823b44b6d5caece
+    digest: sha256:96d20829acfa2c7e6626cc3fca12509344247fc8e4f7a0d3f2cf5d33628deb6c
