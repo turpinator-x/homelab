@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 5b20ec4: feat(web): client dashboard as a case's landing page, with audience layouts
+  # Built from the app repo's main 313d34d: feat(web): themes, accents and per-layout dashboard customization
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-5b20ec4db6ccca72fcc4c54d856f14011e10a4ca
-    digest: sha256:d72ff259bcb76c76fdce0755addceb167bf529da6198c0b7a74f3606727e4f43
+    newTag: sha-313d34d78a0e1de6c532d54d7f4612a3b0fc4dc2
+    digest: sha256:4c31041f41dd6182d89e82cfdb18d2ee8237fa77b7fad40dc7b60204a6251b0e
