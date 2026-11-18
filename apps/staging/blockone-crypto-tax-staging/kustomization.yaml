@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 7b3fefd: feat: QuickBooks Online and Xero journal-entry export with per-entity chart of a
+  # Built from the app repo's main 16a5701: ci: raise the pytest job timeout to 30 minutes
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-7b3fefde7a529c741d4eb47a95845723fd5f9caa
-    digest: sha256:747dc7236f8caa2dacdfcf1daf00eb33412a11201a0378c0e4415d68c8ae091e
+    newTag: sha-16a5701d7a481baae9d3fe89d823b44b6d5caece
+    digest: sha256:96d20829acfa2c7e6626cc3fca12509344247fc8e4f7a0d3f2cf5d33628deb6c
