@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main f96a3f9: feat(infra): one-command DigitalOcean launch, restore drill, WISP and incident r
+  # Built from the app repo's main 4ab1499: feat(regwatch): Regulatory Watch with official sources, rule-change records, rul
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-f96a3f94d8e77376c8123853540c9ea0ede9b58e
-    digest: sha256:7f4f58b59fbc5d674e767bae0bb6a74b6b9443b5ddfc0cc1ec056f0f13954fa6
+    newTag: sha-4ab14991adefd452c3c38dc86262d6f4f6cb98df
+    digest: sha256:8497ecb3159b04d81fa79470cfc3e49cc8b819acbe030c13566603780e1564f1
