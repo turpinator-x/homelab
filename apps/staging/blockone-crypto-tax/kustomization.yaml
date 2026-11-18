@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main bc73843: Merge pull request #120 from turpinator-x/feat/regwatch-home-notices
+  # Built from the app repo's main 70049d6: Merge pull request #123 from turpinator-x/feat/bank-basis-and-burn-label
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-bc738434f208e781dacfdf8e079dd19cf46baed3
-    digest: sha256:4c9cc96a3b02515334825e185a09326a95da38c729d5b756a1f04df7b4b15169
+    newTag: sha-70049d6b775ad454c740a660fa2ccb8ea2fd8283
+    digest: sha256:805be4bf9f598d1d6d089372274beb86f57ec3cc0981aeabee4335b772e4011f
