@@ -121,7 +121,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main d6f1332: fix(web): honest interim for the Compare job's records side (label, own-build wa
+  # Built from the app repo's main 3f03cab: feat(decisions): chained CPA decision file with check and list commands
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-d6f1332dc80b7c40cd24d9e6740bf7059735cc48
-    digest: sha256:170c74ccdeebc92c40304b532099db8bc5121d1f453cf399b7516b5f5c184b34
+    newTag: sha-3f03cabe79c6f05fee390f408ffd86126fb1a5b2
+    digest: sha256:93ebe567e81a9cd0b51353da3743c654990e2799fd3bb73edb27865780757335
