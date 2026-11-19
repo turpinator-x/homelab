@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 7fa1cb3: Merge pull request #124 from turpinator-x/fix/flarebank-usdt0-symbol-alias
+  # Built from the app repo's main 96a023a: Merge pull request #131 from turpinator-x/fix/compare-job-koinly-only-workspace
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-7fa1cb34277ef10886756592ec2a12e83dd3d656
-    digest: sha256:026fd28e5281b5a8d0b97d0638e2ef7c01e7d4bd58db26aa84af9701fd043348
+    newTag: sha-96a023aab2440d43b1bcbc52b82b5b4bc8e0ff50
+    digest: sha256:358d0b8faf88f9bdcddc3cf7b523e8af132cbb83333824f61e9b4df90405a847
