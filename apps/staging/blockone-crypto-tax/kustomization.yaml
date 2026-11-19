@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main d6f1332: Merge pull request #132 from turpinator-x/fix/compare-job-honest-interim
+  # Built from the app repo's main 3f03cab: Merge pull request #134 from turpinator-x/feat/cpa-decision-file
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-d6f1332dc80b7c40cd24d9e6740bf7059735cc48
-    digest: sha256:170c74ccdeebc92c40304b532099db8bc5121d1f453cf399b7516b5f5c184b34
+    newTag: sha-3f03cabe79c6f05fee390f408ffd86126fb1a5b2
+    digest: sha256:93ebe567e81a9cd0b51353da3743c654990e2799fd3bb73edb27865780757335
