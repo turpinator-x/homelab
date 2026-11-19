@@ -1,6 +1,6 @@
 # Self-hosted GitHub Actions runners
 
-Status: **built, not yet live** (2026-11-10). The manifests are in `infrastructure/arc/` and `clusters/staging/arc.yaml`. They go live once the GitHub App credentials are added and the pull request is merged.
+Status: **live** since 2026-11-10 (#28, with fixes in #29 and #30). The manifests are in `infrastructure/arc/` and `clusters/staging/arc.yaml`. `claims-app` and `blockone-devops-ai-journey` run CI on these runners (checked 2026-11-19); other private repos switch one at a time.
 
 AI-assisted: designed and written with Claude Code; I set the requirements (no conflicts with the model platform or other projects, private repos only, no cost) and review and run each step.
 

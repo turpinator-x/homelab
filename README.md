@@ -22,6 +22,7 @@ I'm Jarrod Turpin, a DevOps and Platform Engineer with 20+ years in enterprise I
 | Monitoring | kube-prometheus-stack (Prometheus, Grafana, Alertmanager) as a Flux HelmRelease from an OCI registry |
 | Updates | Self-hosted Renovate runs hourly on a GitHub App and covers 15 repos; low-risk updates merge on their own, usually after a 3-day wait, and majors wait for a Monday review |
 | CI | GitHub Actions: kubeconform on every Flux path (strict schemas, SHA-pinned actions) and a full-history gitleaks scan. These report problems; they are not required checks |
+| CI runners | Self-hosted GitHub Actions runners for private repos, run in the cluster by Actions Runner Controller: GitHub App auth, Docker-in-Docker scale sets with CPU and memory quotas (AI-assisted, [docs/github-runners.md](docs/github-runners.md)). Public repos stay on GitHub's runners |
 | Workload security | App containers run as non-root; the public dashboard pod has no API token, a restricted-level security context and a NetworkPolicy; `main` is protected from force pushes and deletion |
 
 ```
@@ -52,6 +53,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 
 - [ ] Trusted LAN certificates: cert-manager with Let's Encrypt (DNS-01 through Cloudflare)
 - [x] Alertmanager receiver (Telegram) for backup and critical alerts
+- [x] Self-hosted GitHub Actions runners for private repos ([docs/github-runners.md](docs/github-runners.md))
 - [ ] An automated node upgrade process
 - [ ] A self-hosted model platform: a small model on CPU with a pinned, checked model file, metrics, a dashboard and alerts (phase 1) and a gateway with keys, limits and failover (phase 2) are running. Next: an SLO on time to first token, then a failure drill. See [docs/llm.md](docs/llm.md)
 - [ ] A Talos test cluster, then a three-control-plane rebuild
