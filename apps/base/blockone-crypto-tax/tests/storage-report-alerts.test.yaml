@@ -1,0 +1,133 @@
+# promtool test rules for storage-report-alerts.yaml (run: scripts/test-blockone-alerts.sh). The weekly report job
+# fails or goes missing: each alert has a case that fires and one that must stay quiet. A failed BACKUP job must not
+# fire the storage report's alert (the names differ), and a manual run named blockone-storage-report-manual-* must.
+rule_files:
+  - ../storage-report-alerts.rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: a failed scheduled run alerts
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000", condition="true"}'
+        values: '1x10'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BlockOneStorageReportJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              job_name: blockone-storage-report-29400000
+              condition: "true"
+            exp_annotations:
+              summary: "Storage report job blockone-storage-report-29400000 failed"
+              description: "kubectl --context homelab -n blockone-crypto-tax logs job/blockone-storage-report-29400000"
+              runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+  - name: a failed manual run alerts too
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-storage-report-manual-202611211530", condition="true"}'
+        values: '1x10'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-storage-report-manual-202611211530"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BlockOneStorageReportJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              job_name: blockone-storage-report-manual-202611211530
+              condition: "true"
+            exp_annotations:
+              summary: "Storage report job blockone-storage-report-manual-202611211530 failed"
+              description: "kubectl --context homelab -n blockone-crypto-tax logs job/blockone-storage-report-manual-202611211530"
+              runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+  - name: a failed backup job or a successful report job does not fire it
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-backup-29400000", condition="true"}'
+        values: '1x10'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-backup-29400000"}'
+        values: '0x10'
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400001", condition="true"}'
+        values: '0x10'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400001"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BlockOneStorageReportJobFailed
+        exp_alerts: []
+  - name: a failure older than a day is no longer shown
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000", condition="true"}'
+        values: '1x2000'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000"}'
+        values: '0x2000'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: BlockOneStorageReportJobFailed
+        exp_alerts: []
+  - name: stale fires after 8 days without a success, stays quiet at 7
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"}'
+        values: '0x12000'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: BlockOneStorageReportStale
+        exp_alerts: []
+      - eval_time: 8d2h
+        alertname: BlockOneStorageReportStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              cronjob: blockone-storage-report
+            exp_annotations:
+              summary: "The weekly storage report has not succeeded for more than 8 days"
+              description: "kubectl --context homelab -n blockone-crypto-tax get cronjob,jobs"
+              runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+  - name: stale ignores the backup cronjobs
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="blockone-crypto-tax", cronjob="blockone-backup"}'
+        values: '0x12000'
+    alert_rule_test:
+      - eval_time: 9d
+        alertname: BlockOneStorageReportStale
+        exp_alerts: []
+  - name: never succeeded fires 8 days after creation, not before, and not once it has succeeded
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"}'
+        values: '0x12000'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: BlockOneStorageReportNeverSucceeded
+        exp_alerts: []
+      - eval_time: 8d2h
+        alertname: BlockOneStorageReportNeverSucceeded
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              cronjob: blockone-storage-report
+            exp_annotations:
+              summary: "The weekly storage report has existed for 8 days without one successful run"
+              description: "kubectl --context homelab -n blockone-crypto-tax get cronjob,jobs"
+              runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+  - name: never succeeded stays quiet once a success exists
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"}'
+        values: '0x12000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"}'
+        values: '0x12000'
+    alert_rule_test:
+      - eval_time: 8d2h
+        alertname: BlockOneStorageReportNeverSucceeded
+        exp_alerts: []

@@ -94,3 +94,18 @@ Alertmanager's config is in the HelmRelease values (`monitoring/controllers/base
 Grouped by `alertname` and `namespace` (30 s wait, 5 min group interval), resolved notices on. Inhibitions: the chart's defaults (critical hides warning/info for the same alert and namespace, warning hides info), plus `BlockOneBackupStale` hides `BlockOneBackupJobFailed` while both fire. The config was checked with `amtool check-config` and `amtool config routes test` from the pinned Alertmanager image (v0.34.1).
 
 Test a notification: port-forward `svc/kube-prometheus-stack-alertmanager 9093` and POST an alert with `severity=critical` to `/api/v2/alerts`, then check `alertmanager_notifications_total{integration="telegram"}` rose and `alertmanager_notifications_failed_total{integration="telegram"}` didn't.
+
+### Weekly storage report (BlockOneStorageReport)
+
+The weekly storage report job (`apps/base/blockone-crypto-tax/storage-report.yaml`, docs/blockone-crypto-tax.md, "Weekly storage report") reaches me through this same Alertmanager: it POSTs one synthetic alert, `alertname=BlockOneStorageReport`, to `http://kube-prometheus-stack-alertmanager.monitoring.svc:9093/api/v2/alerts`, with the digest in `summary` and `description`. `severity=warning` is the normal weekly digest; `severity=critical` with a `GROWTH:` prefix means a growth limit was crossed. Both match the `BlockOne*` route (warning or critical), so no Alertmanager config changed. The alert is only active for 15 minutes; the resolved notice that follows is normal. The monitoring namespace has no NetworkPolicy, so Alertmanager needs no ingress rule; the job's own egress rule allows DNS and the `app.kubernetes.io/name=alertmanager` pod on 9093 only.
+
+If the job itself fails, `BlockOneStorageReportJobFailed` (job names starting `blockone-storage-report-`, shown for a day) and `BlockOneStorageReportStale` / `BlockOneStorageReportNeverSucceeded` (8 days) fire, both warnings and both under the `BlockOne*` route. They are unit-tested with promtool (`apps/base/blockone-crypto-tax/tests/storage-report-alerts.test.yaml`, run by `scripts/test-blockone-alerts.sh`).
+
+Run the report now and read it:
+
+```
+job=blockone-storage-report-manual-$(date +%Y%m%d%H%M)
+kubectl --context homelab -n blockone-crypto-tax create job --from=cronjob/blockone-storage-report "$job"
+kubectl --context homelab -n blockone-crypto-tax wait --for=condition=complete --timeout=300s "job/$job"
+kubectl --context homelab -n blockone-crypto-tax logs "job/$job"
+```

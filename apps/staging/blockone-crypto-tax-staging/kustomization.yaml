@@ -74,6 +74,42 @@ patches:
       kind: PrometheusRule
       metadata:
         name: unused
+  # The weekly storage report (production's volume, production's alert route) is not part of staging either
+  - target: {kind: CronJob, name: blockone-storage-report}
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: unused
+  - target: {kind: PersistentVolumeClaim, name: blockone-storage-report-state}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: unused
+  - target: {kind: NetworkPolicy, name: blockone-storage-report}
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: unused
+  - target: {kind: PrometheusRule, name: blockone-storage-report}
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: unused
+  - target: {kind: ConfigMap, name: blockone-storage-report-script}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: unused
   - target: {kind: NetworkPolicy, name: "blockone-backup|blockone-backup-mirror"}
     patch: |-
       $patch: delete

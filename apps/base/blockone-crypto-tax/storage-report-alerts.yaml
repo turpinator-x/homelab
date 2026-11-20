@@ -1,0 +1,48 @@
+# Alerts for the weekly storage report (storage-report.yaml), mirroring backup-alerts.yaml. The report itself arrives as
+# the synthetic alert BlockOneStorageReport posted by the job; these fire when the job does not run or does not finish.
+# The label is what this Prometheus's ruleSelector matches.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blockone-storage-report
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blockone-storage-report
+      rules:
+        - alert: BlockOneStorageReportJobFailed
+          # A run that failed (du/find failed, or Alertmanager could not be reached), shown for a day. The job name
+          # must start blockone-storage-report- (the scheduled runs do; name a manual run that way too)
+          expr: |
+            kube_job_failed{namespace="blockone-crypto-tax", job_name=~"blockone-storage-report-.+", condition="true"} == 1
+            and on (namespace, job_name) (time() - kube_job_created < 24 * 3600)
+          labels:
+            severity: warning
+          annotations:
+            summary: "Storage report job {{ $labels.job_name }} failed"
+            description: "kubectl --context homelab -n blockone-crypto-tax logs job/{{ $labels.job_name }}"
+            runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+        - alert: BlockOneStorageReportStale
+          # Weekly job: more than 8 days since the last success means last Sunday's run did not succeed
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"} > 8 * 24 * 3600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The weekly storage report has not succeeded for more than 8 days"
+            description: "kubectl --context homelab -n blockone-crypto-tax get cronjob,jobs"
+            runbook: docs/blockone-crypto-tax.md (Weekly storage report)
+        - alert: BlockOneStorageReportNeverSucceeded
+          # The metric above only exists after a first success; this covers a CronJob that has never had one
+          expr: |
+            (time() - kube_cronjob_created{namespace="blockone-crypto-tax", cronjob="blockone-storage-report"} > 8 * 24 * 3600)
+            unless on (namespace, cronjob) kube_cronjob_status_last_successful_time
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The weekly storage report has existed for 8 days without one successful run"
+            description: "kubectl --context homelab -n blockone-crypto-tax get cronjob,jobs"
+            runbook: docs/blockone-crypto-tax.md (Weekly storage report)
