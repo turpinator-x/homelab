@@ -51,7 +51,14 @@ patches:
       kind: PersistentVolumeClaim
       metadata:
         name: unused
-  - target: {kind: PrometheusRule, name: blockone-backup}
+  - target: {kind: ConfigMap, name: "blockone-backup-scripts.*"}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: unused
+  - target: {kind: PrometheusRule, name: "blockone-backup|blockone-storage"}
     patch: |-
       $patch: delete
       apiVersion: monitoring.coreos.com/v1

@@ -1,9 +1,15 @@
 # Nightly encrypted backups of PostgreSQL and the case files (docs/blockone-crypto-tax.md, "Backups and restore").
 #
 #   03:30 blockone-backup (minisrv01): pg_dump + a tar of blockone-data, encrypted by rclone's crypt remote and
-#         uploaded to a Cloudflare R2 bucket under YYYY/MM/DD (UTC), then anything older than 35 days is deleted.
-#   04:30 blockone-backup-mirror (pisrv01): copies the still-encrypted R2 objects onto pisrv01's own volume, keeps
-#         35 days there, and proves last night's backup decrypts and reads (pg_restore --list, tar -t).
+#         uploaded to a Cloudflare R2 bucket under YYYY/MM/DD (UTC). The nightly run then prunes by
+#         backup-prune.sh: nightly sets after 35 days, pre-release sets (below) after 7, never the newest sets.
+#   04:30 blockone-backup-mirror (pisrv01): copies the still-encrypted R2 objects onto pisrv01's own volume, prunes
+#         it by the same rules, and proves last night's backup decrypts and reads (pg_restore --list, tar -t).
+#   Pre-release sets: promote.sh runs a Job from this CronJob named bk-predeploy-* (and the mirror one, bkv-*).
+#         rollback.sh's bk-prerollback-* sets are NOT tagged and keep the nightly 35 days. A bk-predeploy run tags its set with a blockone-predeploy-<stamp>.marker file, and
+#         does not prune, so a retention problem can never block a release. Nothing else about the set differs, so
+#         the log lines promote.sh reads are unchanged.
+#   The plain dump and tar are written only to memory-backed emptyDirs (nothing unencrypted reaches a disk).
 #
 # rclone is configured by environment variables only (RCLONE_CONFIG_<REMOTE>_<OPTION>), no config file. The
 # R2 keys and the crypt passwords come from the SOPS Secrets blockone-backup and blockone-backup-mirror (overlay).
@@ -24,6 +30,15 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      # A failed prune/size step (exit 17 from the upload container, after a verified upload) fails the Job without
+      # the retry, which would otherwise upload a second full set. Any other failure is retried once, as before.
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              containerName: upload
+              operator: In
+              values: [17]
       activeDeadlineSeconds: 2700 # 45 minutes, well before the mirror's run
       template:
         metadata:
@@ -58,20 +73,36 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   date -u +%Y/%m/%d > /work/day
                   echo "$stamp" > /work/stamp
+                  # A pre-release set (started by promote.sh: bk-predeploy-*) is tagged so that retention can tell it
+                  # from a nightly one. Any other Job name is treated as nightly: the safe direction is keeping more.
+                  # bk-prerollback-* (rollback.sh) is deliberately NOT tagged: the app tells the owner it holds the only
+                  # copy of dropped agreement signatures, kept for the full 35 days.
+                  case "$JOB_NAME" in
+                    bk-predeploy-*) printf 'kind=predeploy\njob=%s\n' "$JOB_NAME" > "/work/blockone-predeploy-$stamp.marker" ;;
+                    *) ;;
+                  esac
                   tar -C /data --exclude=./lost+found --exclude='./.pre-restore-*' --exclude='./.restoring-*' \
                     -czf "/work/blockone-data-$stamp.tar.gz.partial" .
                   tar -tzf "/work/blockone-data-$stamp.tar.gz.partial" > /dev/null
                   mv "/work/blockone-data-$stamp.tar.gz.partial" "/work/blockone-data-$stamp.tar.gz"
                   ls -l /work
+                  # work-volume use against its limit (the tmpfs is sized to the volume's sizeLimit)
+                  df -Pk /work | awk 'NR == 2 { pct = int($3 * 100 / $2); printf "work: %s used %d of %d MiB (%d%%)\n", (pct >= 70 ? "WARNING" : "ok"), $3 / 1024, $2 / 1024, pct }'
               env:
                 - name: HOME
                   value: /tmp
+                - name: JOB_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['job-name'] # set by the Job controller; the script fails without it
+              # The archive is written into a memory-backed volume, and those pages are charged to the container that
+              # wrote them: the limit is the volume's 3 Gi plus room for tar and gzip.
               resources:
                 requests:
                   cpu: 20m
-                  memory: 32Mi
+                  memory: 1Gi
                 limits:
-                  memory: 128Mi
+                  memory: 3584Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -106,6 +137,7 @@ spec:
                   pg_restore --list "/work/blockone-db-$stamp.dump.partial" > /dev/null # readable before it's kept
                   mv "/work/blockone-db-$stamp.dump.partial" "/work/blockone-db-$stamp.dump"
                   ls -l /work
+                  df -Pk /work | awk 'NR == 2 { pct = int($3 * 100 / $2); printf "work: %s used %d of %d MiB (%d%%)\n", (pct >= 70 ? "WARNING" : "ok"), $3 / 1024, $2 / 1024, pct }'
               env:
                 - name: PGPASSWORD
                   valueFrom:
@@ -134,7 +166,8 @@ spec:
                 - name: tmp
                   mountPath: /tmp
           containers:
-            # 3. Encrypt and upload, check the upload against the local files, then apply the 35-day retention.
+            # 3. Encrypt and upload, check the upload against the local files, then (nightly run only) apply the
+            #    retention in backup-prune.sh and log the bucket's size against R2's 10 GB free allowance (size: WARNING at 75%).
             - name: upload
               image: rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
               command: ["/bin/sh", "-c"]
@@ -142,11 +175,29 @@ spec:
                 - |
                   set -euo pipefail
                   day=$(cat /work/day)
-                  rclone copy /work "backup:$day" --include '*.dump' --include '*.tar.gz' --stats-one-line -v
+                  rclone copy /work "backup:$day" --include '*.dump' --include '*.tar.gz' --include '*.marker' --stats-one-line -v
                   rclone cryptcheck /work "backup:$day" --include '*.dump' --include '*.tar.gz' --one-way
-                  rclone delete backup: --min-age 35d -v
-                  rclone lsf -R --files-only backup: | sort | tail -n 4
+                  # Retention only in the nightly run (the CronJob names its Jobs blockone-backup-<time>). A
+                  # pre-release run stops here: a retention refusal must never fail a release's backup.
+                  # A failure here must not re-run the upload (podFailurePolicy: exit 17 fails the Job without the
+                  # retry), and must not skip the size line or the final listing: the exit code is decided at the end.
+                  step_rc=0
+                  case "$JOB_NAME" in
+                    blockone-backup-*)
+                      /bin/sh /scripts/backup-prune.sh backup: || { echo "prune: FAILED (exit $?)" >&2; step_rc=17; }
+                      /bin/sh /scripts/backup-size-report.sh backup: 10000000000 "R2 bucket" || { echo "size: FAILED" >&2; step_rc=17; }
+                      ;;
+                    *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
+                  esac
+                  # the final listing is informational, but its failure must not hide a prune failure's exit 17
+                  rclone lsf -R --files-only backup: > /tmp/final-listing || { echo "final listing FAILED" >&2; step_rc=17; }
+                  sort /tmp/final-listing | tail -n 4
+                  exit "$step_rc"
               env:
+                - name: JOB_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['job-name']
                 - name: R2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
@@ -218,6 +269,9 @@ spec:
                 - name: work
                   mountPath: /work
                   readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
                 - name: tmp
                   mountPath: /tmp
           volumes:
@@ -226,8 +280,19 @@ spec:
                 claimName: blockone-data
                 readOnly: true
             - name: work
+              # Memory-backed: the plain dump and archive never touch a disk. Measured 2026-11-19: a 452 MB archive
+              # and a 125 KB dump. The archive grew in four discrete steps of about 88 MiB (11-16 to 11-19, roughly
+              # 1,500 to 2,000 files each): cause unknown, owner check: du -sk /data/cases/* from the API pod. The
+              # 7-day prune does not shrink it. The jobs log "work: used X of Y MiB" (WARNING from 70%). If a set
+              # outgrows the volume, tar fails with "No space left on device" and the run fails loudly; raise this
+              # and the archive container's limit together (limit = sizeLimit + 512Mi).
               emptyDir:
-                sizeLimit: 8Gi # a 2 Gi database and 5 Gi of case files, compressed
+                medium: Memory
+                sizeLimit: 3Gi
+            - name: scripts
+              configMap:
+                name: blockone-backup-scripts
+                defaultMode: 0444
             - name: tmp
               emptyDir:
                 sizeLimit: 64Mi
@@ -295,8 +360,18 @@ spec:
                 - |
                   set -euo pipefail
                   rclone copy "r2:$R2_BUCKET/blockone" /mirror/blockone --immutable --stats-one-line -v
-                  rclone delete /mirror/blockone --min-age 35d -v
-                  rclone rmdirs /mirror/blockone --leave-root
+                  # Same retention as R2 (backup-prune.sh), but only in the nightly run (bkv-* Jobs from promote.sh
+                  # skip it: a retention refusal must not block a release). The nightly run also logs the volume against its 10 Gi.
+                  case "$JOB_NAME" in
+                    blockone-backup-mirror-*)
+                      # A failed prune must not skip the decrypt check below: it is recorded, and the verify
+                      # container fails the Job after it has printed its result.
+                      /bin/sh /scripts/backup-prune.sh local: || { echo "prune: FAILED (exit $?)" >&2; echo prune > /verify/step-failed; }
+                      rclone rmdirs /mirror/blockone --leave-root
+                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 10737418240 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
+                      ;;
+                    *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
+                  esac
                   dump=$(rclone lsf -R --files-only --max-age 30h --include '*.dump' local: | sort | tail -n 1)
                   if [ -z "$dump" ]; then
                     echo "FAIL: no database dump newer than 30 hours in the mirror" >&2
@@ -306,8 +381,13 @@ spec:
                   echo "verifying $dump and $data"
                   rclone copyto "local:$dump" /verify/blockone-db.dump
                   rclone copyto "local:$data" /verify/blockone-data.tar.gz
+                  df -Pk /verify | awk 'NR == 2 { pct = int($3 * 100 / $2); printf "work: %s used %d of %d MiB (%d%%)\n", (pct >= 70 ? "WARNING" : "ok"), $3 / 1024, $2 / 1024, pct }'
                   echo "$dump" > /verify/name
               env:
+                - name: JOB_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['job-name']
                 - name: R2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
@@ -361,12 +441,14 @@ spec:
                   value: /tmp/.config
                 - name: RCLONE_CACHE_DIR
                   value: /tmp/.cache
+              # The decrypted dump and archive go into the memory-backed verify volume, and those pages are charged
+              # to this container: limit = the volume's 2 Gi plus room for rclone.
               resources:
                 requests:
                   cpu: 20m
-                  memory: 64Mi
+                  memory: 1Gi
                 limits:
-                  memory: 256Mi
+                  memory: 2560Mi
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -378,6 +460,9 @@ spec:
                   mountPath: /mirror
                 - name: verify
                   mountPath: /verify
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
                 - name: tmp
                   mountPath: /tmp
           containers:
@@ -399,6 +484,10 @@ spec:
                   tar -tzf /verify/blockone-data.tar.gz > /tmp/files
                   files=$(wc -l < /tmp/files)
                   echo "OK: database dump lists $tables tables with data; case-files archive lists $files entries"
+                  if [ -e /verify/step-failed ]; then
+                    echo "FAIL: the nightly $(cat /verify/step-failed) step failed (see the mirror container's log)" >&2
+                    exit 1
+                  fi
               env:
                 - name: HOME
                   value: /tmp
@@ -425,8 +514,19 @@ spec:
               persistentVolumeClaim:
                 claimName: blockone-backup-mirror
             - name: verify
+              # Memory-backed (pisrv01 has 8 GB, about 5.2 GB available at the 7-day minimum): the decrypted copy never
+              # touches the Pi's SD card. Smaller than the upload job's volume on purpose (the Pi's headroom): if the
+              # archive passes 2 Gi the mirror's check fails while the backup still succeeds. Raise it with the Pi's
+              # headroom in view.
               emptyDir:
-                sizeLimit: 8Gi
+                medium: Memory
+                sizeLimit: 2Gi
+            - name: scripts
+              configMap:
+                name: blockone-backup-scripts
+                defaultMode: 0444
             - name: tmp
+              # also memory-backed: the verify step lists the archive's file names into it
               emptyDir:
+                medium: Memory
                 sizeLimit: 64Mi

@@ -9,9 +9,15 @@ resources:
   - networkpolicy.yaml
   - backup.yaml
   - backup-alerts.yaml
+  - storage-alerts.yaml
   - servicemonitor.yaml
   - app-alerts.yaml
 configMapGenerator:
+  # The backup jobs' retention and size-report scripts (tested by scripts/test-backup-prune.sh)
+  - name: blockone-backup-scripts
+    files:
+      - backup-prune.sh
+      - backup-size-report.sh
   # Settings that aren't secret (src/nftcb/web/settings.py in the app repo). Secrets come from the staging overlay.
   - name: blockone-settings
     literals:

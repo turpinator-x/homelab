@@ -1,0 +1,46 @@
+# Disk and volume fill alerts for the nodes that hold the BlockOne data and its backups. The label is what this
+# Prometheus's ruleSelector matches. Warning at 75% and critical at 90% (R42 G2); names start with BlockOne so
+# Alertmanager sends them to Telegram (docs/monitoring.md, "Alerting").
+#
+# What the metrics measure (checked against the live Prometheus on 2026-11-19):
+#  - node_filesystem_*: the root filesystem of each node. minisrv01's is the 1 TB NVMe under the case files,
+#    PostgreSQL and the nightly work; pisrv01's is the SD card that holds the mirror volume (blockone-backup-mirror).
+#    These are the reliable alerts. Because local-path volumes have no size limit of their own, node disk fill IS
+#    volume fill.
+#  - There are deliberately no kubelet_volume_stats_* alerts: the live Prometheus has no such series for any
+#    production volume (only staging's), so a rule on them could never fire.
+#  - The mirror's own 10 Gi budget, the R2 bucket's 10 GB free allowance and the backup work volume's fill have no
+#    metric: the nightly jobs log "size:" lines (WARNING from 75%, CRITICAL from 90%) and "work:" lines (WARNING from
+#    70%); see docs/blockone-crypto-tax.md, "Storage and alerts". Reading those logs is a manual check.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blockone-storage
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blockone-storage
+      rules:
+        - alert: BlockOneNodeDiskWarning
+          expr: |
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) > 0.75
+            and
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) <= 0.90
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disk on node {{ $labels.instance }} is {{ $value | humanizePercentage }} full"
+            description: "Free space on / is under 25%. minisrv01 holds the case files, PostgreSQL and the backup work; pisrv01 holds the backup mirror. Check: kubectl --context homelab -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090, then node_filesystem_avail_bytes."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+        - alert: BlockOneNodeDiskCritical
+          expr: |
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Disk on node {{ $labels.instance }} is {{ $value | humanizePercentage }} full"
+            description: "Free space on / is under 10%: new backups, uploads and the database can start failing. Free space now."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)
