@@ -5,6 +5,10 @@
 # are below production are printed as warnings only: staging's ResourceQuota (quota.yaml) caps how far they can go.
 # Usage: ./scripts/check-staging-memory-parity.sh
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git kubectl python3
 
 cd "$(git rev-parse --show-toplevel)"
 prod=apps/staging/blockone-crypto-tax

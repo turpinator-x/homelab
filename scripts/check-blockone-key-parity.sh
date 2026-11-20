@@ -3,6 +3,10 @@
 # scenario works in both ("no mismatches"). Values differ (each environment has its own keys); only the key
 # NAMES are compared, which SOPS leaves in plain text. Run by validate.sh, so by CI on every PR.
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools python3 diff sed tr dirname
 cd "$(dirname "$0")/.."
 
 prod=apps/staging/blockone-crypto-tax/blockone-explorer-keys-secret.yaml
