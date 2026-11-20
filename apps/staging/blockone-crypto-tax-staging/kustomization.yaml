@@ -130,7 +130,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 3f03cab: feat(decisions): chained CPA decision file with check and list commands
+  # Built from the app repo's main 3c3ff20: fix(web): cap and isolate upload checks so one file cannot exhaust API memory
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-3f03cabe79c6f05fee390f408ffd86126fb1a5b2
-    digest: sha256:93ebe567e81a9cd0b51353da3743c654990e2799fd3bb73edb27865780757335
+    newTag: sha-3c3ff2089bf8bd9feaa9b3d2119730ea0d627955
+    digest: sha256:8ca676a29de0d09fcf531d14aaadd7f8032b09e831cd9c6c868c600989b24a6a
