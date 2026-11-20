@@ -175,7 +175,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 3c3ff20: fix(web): cap and isolate upload checks so one file cannot exhaust API memory
+  # Built from the app repo's main 70c9969: fix(alchemy): stop BSC cache growth (static from block numbers, identity-only ov
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-3c3ff2089bf8bd9feaa9b3d2119730ea0d627955
-    digest: sha256:8ca676a29de0d09fcf531d14aaadd7f8032b09e831cd9c6c868c600989b24a6a
+    newTag: sha-70c99692e6416b7411edfa9681b6f7c1dce3bb57
+    digest: sha256:3aea3c704ff5611bb211bf333d351d605e9c02ab87b85023ca5d33085863f021
