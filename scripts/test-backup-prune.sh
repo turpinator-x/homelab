@@ -6,6 +6,10 @@
 # directory tree on disk). Covers what is deleted and, above all, what must never be: the newest sets, anything
 # younger than the retention, files it does not recognise; and that it refuses on a bad listing or clock.
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git mktemp rm chmod mkdir ln cat grep awk sed sort wc find head date tr diff env bash sh python3 tar gzip mv df ls
 
 root=$(git rev-parse --show-toplevel)
 prune="$root/apps/base/blockone-crypto-tax/backup-prune.sh"

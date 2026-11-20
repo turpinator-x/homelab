@@ -6,6 +6,10 @@
 # step-failed hand-off; then RUNS the upload container's script with stand-in rclone and scripts to prove the exit
 # codes. Needs kubectl (kustomize), python3 with PyYAML.
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git mktemp rm chmod mkdir cat grep kubectl python3 env bash sed sort tail wc
 # shellcheck disable=SC2016
 root=$(git rev-parse --show-toplevel)
 cd "$root"

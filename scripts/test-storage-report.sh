@@ -16,6 +16,10 @@
 # Needs GNU coreutils/findutils, python3 (JSON check). Run as a normal user (permission-denied cases are skipped as root).
 # shellcheck disable=SC2319 # "cond; check name $?" is the point: $? is the condition just above
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git mktemp rm chmod mkdir ln cat grep diff awk sed du df stat find sort cut tr wc sha256sum date head tail sleep mv cp tee sh env python3 seq touch dirname basename uniq nice timeout ls xargs id
 shopt -s inherit_errexit
 
 root=$(git rev-parse --show-toplevel)
@@ -436,9 +440,7 @@ run_report s3 "$fx2" PATH="$tmp/niceshim:$PATH" SHIM_LOG="$tmp/nice.log"
 
 # nice, ionice and timeout missing: loud notes, the run still works
 mkdir -p "$tmp/notools"
-for t in $(compgen -c | sort -u | grep -E '^(du|find|df|stat|awk|sort|sed|cut|tr|wc|sha256sum|date|mktemp|grep|head|tail|cat|sleep|mv|rm|cp|tee|sh|env|python3|seq|touch|printf|dirname|basename|uniq)$'); do
-  ln -sf "$(command -v "$t")" "$tmp/notools/$t" 2> /dev/null || true
-done
+link_tools "$tmp/notools" du find df stat awk sort sed cut tr wc sha256sum date mktemp grep head tail cat sleep mv rm cp tee sh env python3 seq touch dirname basename uniq
 rc=0; run_report f10 "$fx2" PATH="$tmp/notools" || rc=$?
 [ "$rc" -eq 0 ] && grep -q 'WARNING: nice is missing' "$tmp/f10/out" && grep -q 'WARNING: timeout is missing' "$tmp/f10/out" && grep -q 'WARNING: idle I/O' "$tmp/f10/out"; check "missing nice, timeout and ionice: loud WARNING lines in the log, the run still works (rc=$rc)" $?
 grep -q '^Tools missing: .*nice' "$tmp/f10/out"; check "the log header lists the missing tools" $?
@@ -453,9 +455,7 @@ grep -q '^Date ' "$tmp/h1/out" && [ "$(awk '/^7\. Earlier/{f=1;next} /^8\. Lates
 
 # a missing tool
 mkdir -p "$tmp/nofind"
-for t in $(compgen -c | sort -u | grep -E '^(du|df|stat|awk|sort|sed|cut|tr|wc|sha256sum|date|mktemp|timeout|nice|grep|head|tail|cat|sleep|mv|rm|cp|tee|sh|env|python3|ionice|seq|touch|printf|dirname|basename)$'); do
-  ln -sf "$(command -v "$t")" "$tmp/nofind/$t" 2> /dev/null || true
-done
+link_tools "$tmp/nofind" du df stat awk sort sed cut tr wc sha256sum date mktemp timeout nice grep head tail cat sleep mv rm cp tee sh env python3 seq touch dirname basename
 rc=0; run_report f8 "$fx2" PATH="$tmp/nofind" || rc=$?
 [ "$rc" -ne 0 ] && grep -q "required command 'find' not found" "$tmp/f8/err"; check "a missing find fails loudly instead of reporting zeros" $?
 
@@ -469,8 +469,10 @@ if [ -x "$BUSYBOX" ]; then
   "$BUSYBOX" ash -n "$script"; check "busybox ash parses the script" $?
   farm=$tmp/bbfarm
   mkdir -p "$farm"
+  bb_applets=$("$BUSYBOX" --list)
   for t in du df stat awk sort sed cut wc sha256sum mktemp grep head tail cat sleep mv rm cp printf seq touch tee uniq; do
-    if "$BUSYBOX" --list | grep -qx "$t"; then ln -sf "$BUSYBOX" "$farm/$t"; fi
+    # not "busybox --list | grep -q": under pipefail grep exiting early can SIGPIPE busybox and drop an applet at random
+    if grep -qx "$t" <<< "$bb_applets"; then ln -sf "$BUSYBOX" "$farm/$t"; fi
   done
   for t in find tr date timeout nice ionice sh env xargs dirname basename python3; do # no busybox applet on this host
     p=$(command -v "$t" || true)
@@ -480,11 +482,21 @@ if [ -x "$BUSYBOX" ]; then
   SH="$BUSYBOX ash" run_report bb "$fx" PATH="$farm" || rc=$?
   check "the whole report runs under busybox ash with busybox du/df/stat/awk/sed/sort/sha256sum (rc=$rc)" "$rc"
   if [ "$rc" -ne 0 ]; then tail -5 "$tmp/bb/err" >&2; fi
-  diff <(sed '/^meta/d' "$tmp/r1/state/last.tsv") <(sed '/^meta/d' "$tmp/bb/state/last.tsv"); check "busybox and GNU measure and label the same tree identically (state files equal)" $?
-  leaks "$tmp/bb/out" "$tmp/bb/err" "$tmp/bb/stub.body"; check "busybox run: no raw names either" $?
+  # the comparisons read the busybox run's state: after a failed run they would only add "can't read" noise
+  if [ "$rc" -eq 0 ]; then
+    diff <(sed '/^meta/d' "$tmp/r1/state/last.tsv") <(sed '/^meta/d' "$tmp/bb/state/last.tsv"); check "busybox and GNU measure and label the same tree identically (state files equal)" $?
+    leaks "$tmp/bb/out" "$tmp/bb/err" "$tmp/bb/stub.body"; check "busybox run: no raw names either" $?
+  else
+    check "busybox state comparisons skipped: the busybox run failed first (see its stderr above)" 1
+  fi
   rc=0
   SH="$BUSYBOX ash" run_report bb2 "$fxr" PATH="$farm" || rc=$?
-  diff <(sed '/^meta/d' "$tmp/r4/state/last.tsv") <(sed '/^meta/d' "$tmp/bb2/state/last.tsv"); check "busybox ash: the account/taxpayer layout gives the same state as GNU (rc=$rc)" $?
+  if [ "$rc" -eq 0 ]; then
+    diff <(sed '/^meta/d' "$tmp/r4/state/last.tsv") <(sed '/^meta/d' "$tmp/bb2/state/last.tsv"); check "busybox ash: the account/taxpayer layout gives the same state as GNU (rc=$rc)" $?
+  else
+    tail -5 "$tmp/bb2/err" >&2
+    check "busybox ash: the account/taxpayer layout run failed (rc=$rc), state comparison skipped" 1
+  fi
 else
   echo "skip - busybox not found at $BUSYBOX (set BUSYBOX=...)"
 fi

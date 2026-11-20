@@ -20,6 +20,14 @@
 #      App-image-only differences (promotions) always pass and are listed.
 # origin/main must exist (CI checks out with fetch-depth 0): without it the production check can't run, so it fails.
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# validate.sh runs a copy of this file from origin/main in a temp dir, where lib/ is not next to it: validate.sh has
+# already run the preflight then
+if [ -f "$_here/lib/require-tools.sh" ]; then
+  # shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+  require_tools git kubectl python3 diff mktemp sed
+fi
 shopt -s inherit_errexit
 
 allow=0

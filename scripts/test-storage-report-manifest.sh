@@ -5,6 +5,10 @@
 # NetworkPolicy (DNS and Alertmanager only), the script ConfigMap equal to the tested file, the alert rule, and that
 # staging gets none of it. Needs kubectl (kustomize), python3 with PyYAML.
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git mktemp rm cat kubectl python3
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 tmp=$(mktemp -d)

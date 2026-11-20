@@ -3,6 +3,10 @@
 # Unit-tests the BlockOne PrometheusRules with promtool: pulls spec.groups out of each PrometheusRule and runs
 # apps/base/blockone-crypto-tax/tests/*.test.yaml against it. Needs promtool (mise.toml pins it) and python3 with PyYAML (the staging isolation check uses it too).
 set -euo pipefail
+_here=${BASH_SOURCE[0]%/*}; [ "$_here" != "${BASH_SOURCE[0]}" ] || _here=.
+# shellcheck source=lib/require-tools.sh
+. "$_here/lib/require-tools.sh"
+require_tools git mktemp rm cp mkdir promtool python3
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
