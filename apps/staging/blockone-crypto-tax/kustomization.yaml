@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 3c3ff20: Merge pull request #137 from turpinator-x/fix/upload-memory-cap
+  # Built from the app repo's main 70c9969: Merge pull request #139 from turpinator-x/fix/alchemy-bsc-cache-growth
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-3c3ff2089bf8bd9feaa9b3d2119730ea0d627955
-    digest: sha256:8ca676a29de0d09fcf531d14aaadd7f8032b09e831cd9c6c868c600989b24a6a
+    newTag: sha-70c99692e6416b7411edfa9681b6f7c1dce3bb57
+    digest: sha256:3aea3c704ff5611bb211bf333d351d605e9c02ab87b85023ca5d33085863f021
