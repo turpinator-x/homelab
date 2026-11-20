@@ -20,9 +20,8 @@ for rule in app-alerts backup-alerts; do
   promtool check rules "$tmp/$rule.rules.yaml"
 done
 
-# The tests name the extracted files as rule_files
-cd "$tmp"
-mkdir tests
-cp "$root/$dir"/tests/*.test.yaml tests/
-cd tests
-promtool test rules ./*.test.yaml
+# The tests name the extracted files as rule_files, relative to their own copy. Run from the repo root so mise's
+# shim for promtool still finds mise.toml.
+mkdir "$tmp/tests"
+cp "$dir"/tests/*.test.yaml "$tmp/tests/"
+promtool test rules "$tmp"/tests/*.test.yaml
