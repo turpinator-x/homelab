@@ -60,6 +60,26 @@ tests:
       - eval_time: 5m
         alertname: BlockOneStorageReportJobFailed
         exp_alerts: []
+  - name: a failure is still shown five hours later (the window is a day, not an hour)
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000", condition="true"}'
+        values: '1x400'
+      - series: 'kube_job_created{namespace="blockone-crypto-tax", job_name="blockone-storage-report-29400000"}'
+        values: '0x400'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: BlockOneStorageReportJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              job_name: blockone-storage-report-29400000
+              condition: "true"
+            exp_annotations:
+              summary: "Storage report job blockone-storage-report-29400000 failed"
+              description: "kubectl --context homelab -n blockone-crypto-tax logs job/blockone-storage-report-29400000"
+              runbook: docs/blockone-crypto-tax.md (Weekly storage report)
   - name: a failure older than a day is no longer shown
     interval: 1m
     input_series:

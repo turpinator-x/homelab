@@ -97,6 +97,11 @@ ln -s "$tmp/outside" "$big/data/work/link-to-outside"
 ln -s "$tmp/outside" "$fx/cases/link-case"
 ln -s ../.. "$big/data/work/loop"
 ln -s "$big/config/case.yaml" "$big/data/work/link-to-file"
+# names that BEGIN with an allow-listed word, and year-like names outside the places the app makes them
+mkdir -p "$big/data-John-Smith" "$big/reports 123-45-6789" "$big/data/work.private" "$big/data/work/2031" "$big/data/rawJohn" "$big/reports/2024" "$big/config-Smith"
+head -c 30000 /dev/zero > "$big/data-John-Smith/f"
+head -c 30000 /dev/zero > "$big/data/work/2031/f"
+head -c 30000 /dev/zero > "$big/reports/2024/f"
 # a folder named like an allow-listed one, and an app folder with a hostile sibling
 mkdir -p "$big/data/work/cache/Secret-Provider-Zorblax"
 head -c 5000 /dev/zero > "$big/data/work/cache/Secret-Provider-Zorblax/x"
@@ -106,7 +111,7 @@ set +e # from here a failing condition is counted by check, not fatal
 leaks() { # leaks <file...>: succeeds when no private token appears in any of the files
   local f t
   for f in "$@"; do
-    for t in Zorblax Smithwick ssn123456789 secret-nl "newline" PWNED "a b c" "\-rf" "--help" "ünï" sëcret "dotdot" "hidden-nl" "Q3 " "link-to" "Secret-Provider" "wallet.json" "koinly-export" "-dash"; do
+    for t in Zorblax Smithwick ssn123456789 secret-nl "newline" PWNED "a b c" "\-rf" "--help" "ünï" sëcret "dotdot" "hidden-nl" "Q3 " "link-to" "Secret-Provider" "wallet.json" "koinly-export" "-dash" "John-Smith" "123-45-6789" "work.private" "rawJohn" "config-Smith"; do
       if grep -qiF -e "$t" "$f" 2> /dev/null; then echo "LEAK: '$t' found in $f" >&2; return 1; fi
     done
   done
@@ -126,14 +131,17 @@ leaks "$tmp/r1/scratch"/* 2> /dev/null; check "nothing private is left in the sc
 # ---- 2. hash labels and ranking ----
 h() { printf '%s' "$1" | sha256sum | cut -c1-6; }
 hb=$(h "Zorblax-Q-Taxpayer"); hn=$(h "$nl"); hh=$(h "-rf")
-grep -q "^#1 .* $hb\|^#1 *$hb" "$tmp/r1/out"; check "the largest case folder is rank 1 with the right 6-character SHA-256 ($hb)" $?
-grep -Eq "^#[0-9]+ +$hn " "$tmp/r1/out"; check "a name with a newline is labelled by the hash of the whole name ($hn)" $?
-grep -Eq "^#[0-9]+ +$hh " "$tmp/r1/out"; check "a leading-dash name is labelled by its hash ($hh)" $?
+grep -Eq "^#1 +- +$hb " "$tmp/r1/out"; check "the largest case folder is rank 1 with the right 6-character SHA-256 ($hb)" $?
+grep -Eq "^#[0-9]+ +- +$hn " "$tmp/r1/out"; check "a name with a newline is labelled by the hash of the whole name ($hn)" $?
+grep -Eq "^#[0-9]+ +- +$hh " "$tmp/r1/out"; check "a leading-dash name is labelled by its hash ($hh)" $?
 n=$(grep -Ec '^#[0-9]+ ' "$tmp/r1/out"); [ "$n" -eq 10 ]; check "exactly 10 case folders are listed (got $n)" $?
-grep -Eq 'Case folders: 11,' "$tmp/r1/out"; check "all 11 case folders are counted (the app folders and the symlink are not)" $?
-awk '/^#[0-9]+ /{ s=$3; if ($4 ~ /KiB/) s=s/1024; if ($4 ~ /GiB/) s=s*1024; if (n++ && s>p+0.0001) bad=1; p=s } END { exit bad }' "$tmp/r1/out"; check "case folders are in descending size order" $?
+grep -Eq 'Taxpayer folders: 11,' "$tmp/r1/out"; check "all 11 case folders are counted (the app folders and the symlink are not)" $?
+awk '/^#[0-9]+ /{ s=$4; if ($5 ~ /KiB/) s=s/1024; if ($5 ~ /GiB/) s=s*1024; if (n++ && s>p+0.0001) bad=1; p=s } END { exit bad }' "$tmp/r1/out"; check "case folders are in descending size order" $?
 
 # ---- 3. allow-list ----
+grep -q '^reports/2024 ' "$tmp/r1/out"; check "a year folder prints under reports" $?
+! grep -q '2031' "$tmp/r1/out"; check "a year-like name elsewhere (data/work/2031) is <other>, not printed" $?
+grep -q '^<other> ' "$tmp/r1/out"; check "names that only START with an allow-listed word (data-..., reports ..., work.private) fall into <other>" $?
 grep -q '^data/work/cache/alchemy ' "$tmp/r1/out"; check "allow-listed names print (data/work/cache/alchemy)" $?
 grep -q '^data/work/proof_A ' "$tmp/r1/out"; check "allow-listed names print (data/work/proof_A)" $?
 grep -q '^reports/09_basis_2024 ' "$tmp/r1/out"; check "the generated per-year report folder name prints" $?
@@ -148,6 +156,29 @@ grep -q '^data/work/cache/<other> ' "$tmp/r1/out"; check "a non-listed folder un
 total_kb=$(awk -F'\t' '$1=="total"{print $3}' "$tmp/r1/state/last.tsv")
 [ "$total_kb" -lt 8000 ]; check "a 6 MiB symlinked folder outside the volume is not counted (total ${total_kb} KiB)" $?
 [ "$(awk -F'\t' '$1=="tree" && $2=="data"{print $3}' "$tmp/r1/state/last.tsv")" -lt 8000 ]; check "the symlink loop did not inflate the largest case (and the run ended)" $?
+
+# ---- 4b. the app's real layout: cases/<account id>/<taxpayer id>/{data,reports,config} ----
+fxr=$tmp/fxr
+acc=ff239bd6-1111-4222-8333-444455556666; tp=7545d750-aaaa-4bbb-8ccc-ddddeeeeffff; tp2=0a1b2c3d-aaaa-4bbb-8ccc-ddddeeee0000
+mkdir -p "$fxr/cases/$acc/$tp/data/work/cache/alchemy/bsc" "$fxr/cases/$acc/$tp/data/work/cache/alchemy/base" "$fxr/cases/$acc/$tp/data/work/cache/etherscan" \
+  "$fxr/cases/$acc/$tp/data/work/proof_A" "$fxr/cases/$acc/$tp/data/raw/koinly" "$fxr/cases/$acc/$tp/reports/09_basis_2024" "$fxr/cases/$acc/$tp/config" \
+  "$fxr/cases/$acc/$tp2/data" "$fxr/cases/regwatch" "$fxr/cases/.agreements" "$fxr/cases/.case-tmp"
+mb 3 "$fxr/cases/$acc/$tp/data/work/cache/alchemy/bsc/a.json"
+mb 1 "$fxr/cases/$acc/$tp/data/work/cache/alchemy/base/b.json"
+mb 1 "$fxr/cases/$acc/$tp/data/raw/koinly/k.csv"
+echo "# case" > "$fxr/cases/$acc/$tp/README.md"
+head -c 5000 /dev/zero > "$fxr/cases/$acc/$tp2/data/x"
+rc=0; run_report r4 "$fxr" || rc=$?
+check "real layout: run exits 0 (rc=$rc)" "$rc"
+ha=$(h "$acc"); ht=$(h "$tp")
+grep -Eq "^#1 +$ha +$ht " "$tmp/r4/out"; check "real layout: rank 1 is account hash + taxpayer hash ($ha/$ht)" $?
+grep -q 'Taxpayer folders: 2,' "$tmp/r4/out"; check "real layout: two taxpayer folders counted, not one account" $?
+for want in data data/work data/work/cache data/work/cache/alchemy data/work/cache/alchemy/bsc data/work/cache/alchemy/base data/work/cache/etherscan data/work/proof_A data/raw/koinly reports reports/09_basis_2024 config; do
+  grep -q "^$want " "$tmp/r4/out"; check "real layout: the breakdown shows $want" $?
+done
+! grep -q '<other> ' "$tmp/r4/out" ; check "real layout: nothing collapses into <other>" $?
+! grep -q "$acc\|$tp" "$tmp/r4/out" "$tmp/r4/stub.body" "$tmp/r4/state/last.tsv"; check "real layout: the account and taxpayer ids never appear (hashes only)" $?
+grep -q '^regwatch ' "$tmp/r4/out"; check "real layout: regwatch stays a named top-level folder" $?
 
 # ---- 5. a folder with 30,000 files ----
 fx2=$tmp/fx2
@@ -226,6 +257,30 @@ run_report gE "$g" $off GROW_FOLDER_KIB=2048 REPORT_NOW=1800604800
 [ "$(sev gE)" = warning ]; check "growth: +1.5 MiB under a 2 MiB folder limit stays a warning" $?
 # the production limits are the ones the owner set
 grep -q 'GROW_PCT:-20}' "$script" && grep -q 'GROW_TOTAL_KIB:-512000}' "$script" && grep -q 'GROW_FOLDER_KIB:-256000}' "$script"; check "the defaults are 20 percent, 500 MiB (512000 KiB) and 250 MiB (256000 KiB)" $?
+# boundaries: exactly at a limit is not over it (the limits are "more than")
+growth_fx "$g" 20 2
+run_report gB1 "$g" GROW_PCT=100000 GROW_TOTAL_KIB=2048 GROW_FOLDER_KIB=99999999
+mb 2 "$g/cases/c1/data/work/cache/alchemy/exact.bin"
+run_report gB1 "$g" GROW_PCT=100000 GROW_TOTAL_KIB=2048 GROW_FOLDER_KIB=99999999 REPORT_NOW=1800604800
+[ "$(sev gB1)" = warning ]; check "boundary: growth of exactly the /data limit (2048 KiB) is not over it" $?
+head -c 4096 /dev/zero > "$g/cases/c1/data/work/cache/alchemy/more.bin"
+run_report gB1 "$g" GROW_PCT=100000 GROW_TOTAL_KIB=2048 GROW_FOLDER_KIB=99999999 REPORT_NOW=1800700000
+[ "$(sev gB1)" = warning ]; check "boundary: the second report compares with the first (+4 KiB) and stays quiet" $?
+growth_fx "$g" 20 2
+run_report gB2 "$g" GROW_PCT=100000 GROW_TOTAL_KIB=99999999 GROW_FOLDER_KIB=2048
+mb 2 "$g/cases/c1/data/work/cache/alchemy/exact.bin"
+run_report gB2 "$g" GROW_PCT=100000 GROW_TOTAL_KIB=99999999 GROW_FOLDER_KIB=2048 REPORT_NOW=1800604800
+[ "$(sev gB2)" = warning ]; check "boundary: growth of exactly the folder limit (2048 KiB) is not over it" $?
+# one big file is one finding, not one per ancestor
+growth_fx "$g" 20 2
+run_report gG "$g" GROW_PCT=100000 GROW_TOTAL_KIB=99999999 GROW_FOLDER_KIB=2048
+mkdir -p "$g/cases/c1/data/work/cache/alchemy/bsc"
+mb 3 "$g/cases/c1/data/work/cache/alchemy/bsc/one.bin"
+run_report gG "$g" GROW_PCT=100000 GROW_TOTAL_KIB=99999999 GROW_FOLDER_KIB=2048 REPORT_NOW=1800604800
+[ "$(sev gG)" = critical ]; check "dedupe: a 3 MiB file under a 2 MiB limit is critical" $?
+[ "$(desc gG | grep -c '^- ')" -eq 1 ] && desc gG | grep -q 'data/work/cache/alchemy/bsc grew +3.0 MiB'; check "dedupe: exactly one reason line, naming the deepest folder (not its five ancestors)" $?
+[ "$(desc gG | grep -c '^Grew: ')" -eq 1 ]; check "dedupe: exactly one Grew line" $?
+[ "$(grep -c '^data/work/cache/alchemy/bsc ' "$tmp/gG/out")" -ge 1 ]; check "dedupe: the report's section 6 lists the deepest folder once" $?
 # the real production limits, with real allocated files (skipped where fallocate is not available)
 if command -v fallocate > /dev/null && fallocate -l 1M "$tmp/falloc-probe" && [ "$(du -sk "$tmp/falloc-probe" | cut -f1)" -ge 1024 ]; then
   growth_fx "$g" 5 2
@@ -319,10 +374,12 @@ if [ "$(id -u)" -ne 0 ]; then
   chmod 000 "$fx3/cases/Zorblax-locked/data/work/Smithwick"
   rc=0; run_report f5 "$fx3" || rc=$?
   chmod 755 "$fx3/cases/Zorblax-locked/data/work/Smithwick"
-  [ "$rc" -ne 0 ] && grep -q "'du' failed twice" "$tmp/f5/err"; check "du fails on an unreadable folder: the Job fails (rc=$rc)" $?
-  grep -q 'permission denied' "$tmp/f5/err"; check "du failure: the reason is summarised from a fixed list" $?
-  leaks "$tmp/f5/out" "$tmp/f5/err"; check "du failure: the path of the unreadable folder is not in the log" $?
-  [ ! -e "$tmp/f5/state/last.tsv" ]; check "du failure: no state saved" $?
+  [ "$rc" -eq 0 ]; check "one unreadable folder does not fail the run (rc=$rc)" $?
+  grep -q '^UNREADABLE: ' "$tmp/f5/out"; check "unreadable: the log says so, and that sizes are lower bounds" $?
+  grep -q 'permission denied' "$tmp/f5/out"; check "unreadable: the reason is summarised from a fixed list" $?
+  leaks "$tmp/f5/out" "$tmp/f5/err" "$tmp/f5/stub.body"; check "unreadable: the path of the unreadable folder is not in the log or alert" $?
+  desc f5 | grep -q 'Unreadable entries'; check "unreadable: the digest says so" $?
+  [ -e "$tmp/f5/state/last.tsv" ]; check "unreadable: the report is delivered and state saved" $?
   fresh f6; chmod 555 "$tmp/f6/state"
   rc=0; run_report f6 "$fx" || rc=$?
   chmod 755 "$tmp/f6/state"
@@ -338,9 +395,65 @@ chmod +x "$tmp/slowbin/du"
 rc=0; run_report f7 "$fx2" PATH="$tmp/slowbin:$PATH" CMD_TIMEOUT=1 || rc=$?
 [ "$rc" -ne 0 ] && grep -q "failed twice (exit 124" "$tmp/f7/err"; check "a du that hangs is killed by the timeout and the Job fails (rc=$rc)" $?
 
+# du exiting 2, or exit 1 with no output at all, is a real failure
+mkdir -p "$tmp/badbin"
+printf '#!/bin/sh\nexit 2\n' > "$tmp/badbin/du"
+chmod +x "$tmp/badbin/du"
+rc=0; run_report f7b "$fx2" PATH="$tmp/badbin:$PATH" || rc=$?
+[ "$rc" -ne 0 ] && grep -q "'du' failed twice (exit 2" "$tmp/f7b/err"; check "du exiting 2 fails the Job (the volume itself failing)" $?
+printf '#!/bin/sh\nexit 1\n' > "$tmp/badbin/du"
+rc=0; run_report f7c "$fx2" PATH="$tmp/badbin:$PATH" || rc=$?
+[ "$rc" -ne 0 ]; check "du exiting 1 with no output at all fails the Job" $?
+
+# shims that record how du and find are called: -x and -xdev must be present, and one failure is retried
+mkdir -p "$tmp/shim"
+real_du=$(command -v du); real_find=$(command -v find)
+printf '#!/bin/sh\necho "$*" >> "$SHIM_LOG"\nexec %s "$@"\n' "$real_du" > "$tmp/shim/du"
+printf '#!/bin/sh\necho "$*" >> "$SHIM_LOG"\nexec %s "$@"\n' "$real_find" > "$tmp/shim/find"
+chmod +x "$tmp/shim/du" "$tmp/shim/find"
+: > "$tmp/shim.log"
+run_report s1 "$fx2" PATH="$tmp/shim:$PATH" SHIM_LOG="$tmp/shim.log"
+[ -s "$tmp/shim.log" ] && ! grep '^-sk' "$tmp/shim.log" | grep -qv '^-skx '; check "every du is called with -x (one filesystem) and without -L" $?
+! grep -E '^/' "$tmp/shim.log" | grep -v -e '-xdev' -e '-mindepth' | grep -q .; check "every find over a tree is called with -xdev (or is a one-level -mindepth listing)" $?
+! grep -qE ' -L | -follow' "$tmp/shim.log"; check "find never follows symlinks" $?
+# a du that fails once is retried and the run still succeeds
+printf '#!/bin/sh\nif [ ! -e "$SHIM_ONCE" ]; then : > "$SHIM_ONCE"; exit 2; fi\nexec %s "$@"\n' "$real_du" > "$tmp/shim/du"
+rm -f "$tmp/once"
+rc=0; run_report s2 "$fx2" PATH="$tmp/shim:$PATH" SHIM_LOG="$tmp/shim.log" SHIM_ONCE="$tmp/once" || rc=$?
+[ "$rc" -eq 0 ] && grep -q "failed once" "$tmp/s2/err"; check "a du that fails once is retried and the run succeeds (rc=$rc)" $?
+
+# exit 2 is a failure even when du printed something (only exit 1 means "some entries unreadable")
+printf '#!/bin/sh\necho "100\t$1"\nexit 2\n' > "$tmp/badbin/du"
+rc=0; run_report f7d "$fx2" PATH="$tmp/badbin:$PATH" || rc=$?
+[ "$rc" -ne 0 ]; check "du exiting 2 with partial output still fails the Job (rc=$rc)" $?
+# every du/find runs under nice 19
+mkdir -p "$tmp/niceshim"
+printf '#!/bin/sh\necho "$*" >> "$SHIM_LOG"\nexec %s "$@"\n' "$(command -v nice)" > "$tmp/niceshim/nice"
+chmod +x "$tmp/niceshim/nice"
+: > "$tmp/nice.log"
+run_report s3 "$fx2" PATH="$tmp/niceshim:$PATH" SHIM_LOG="$tmp/nice.log"
+[ -s "$tmp/nice.log" ] && ! grep -qv '^-n 19 ' "$tmp/nice.log"; check "du and find run under nice -n 19" $?
+
+# nice, ionice and timeout missing: loud notes, the run still works
+mkdir -p "$tmp/notools"
+for t in $(compgen -c | sort -u | grep -E '^(du|find|df|stat|awk|sort|sed|cut|tr|wc|sha256sum|date|mktemp|grep|head|tail|cat|sleep|mv|rm|cp|tee|sh|env|python3|seq|touch|printf|dirname|basename|uniq)$'); do
+  ln -sf "$(command -v "$t")" "$tmp/notools/$t" 2> /dev/null || true
+done
+rc=0; run_report f10 "$fx2" PATH="$tmp/notools" || rc=$?
+[ "$rc" -eq 0 ] && grep -q 'WARNING: nice is missing' "$tmp/f10/out" && grep -q 'WARNING: timeout is missing' "$tmp/f10/out" && grep -q 'WARNING: idle I/O' "$tmp/f10/out"; check "missing nice, timeout and ionice: loud WARNING lines in the log, the run still works (rc=$rc)" $?
+grep -q '^Tools missing: .*nice' "$tmp/f10/out"; check "the log header lists the missing tools" $?
+grep -q '^Tools found:' "$tmp/r1/out"; check "the log header lists the tools found" $?
+
+# history is trimmed to 60 lines
+fresh h1
+for i in $(seq 1 70); do printf '%s\t2026-01-01\t100\t1\twarning\n' "$i" >> "$tmp/h1/state/history.tsv"; done
+run_report h1 "$fx2"
+[ "$(wc -l < "$tmp/h1/state/history.tsv")" -eq 60 ]; check "history.tsv is trimmed to the last 60 reports" $?
+grep -q '^Date ' "$tmp/h1/out" && [ "$(awk '/^7\. Earlier/{f=1;next} /^8\. Latest/{f=0} f && /^2026/' "$tmp/h1/out" | wc -l)" -eq 8 ]; check "the log shows the last 8 earlier reports" $?
+
 # a missing tool
 mkdir -p "$tmp/nofind"
-for t in $(compgen -c | sort -u | grep -E '^(du|df|stat|awk|sort|sed|cut|tr|wc|sha256sum|date|mktemp|timeout|nice|grep|head|tail|cat|sleep|mv|rm|sh|env|python3|ionice|seq|touch|printf|dirname|basename)$'); do
+for t in $(compgen -c | sort -u | grep -E '^(du|df|stat|awk|sort|sed|cut|tr|wc|sha256sum|date|mktemp|timeout|nice|grep|head|tail|cat|sleep|mv|rm|cp|tee|sh|env|python3|ionice|seq|touch|printf|dirname|basename)$'); do
   ln -sf "$(command -v "$t")" "$tmp/nofind/$t" 2> /dev/null || true
 done
 rc=0; run_report f8 "$fx2" PATH="$tmp/nofind" || rc=$?
@@ -369,6 +482,9 @@ if [ -x "$BUSYBOX" ]; then
   if [ "$rc" -ne 0 ]; then tail -5 "$tmp/bb/err" >&2; fi
   diff <(sed '/^meta/d' "$tmp/r1/state/last.tsv") <(sed '/^meta/d' "$tmp/bb/state/last.tsv"); check "busybox and GNU measure and label the same tree identically (state files equal)" $?
   leaks "$tmp/bb/out" "$tmp/bb/err" "$tmp/bb/stub.body"; check "busybox run: no raw names either" $?
+  rc=0
+  SH="$BUSYBOX ash" run_report bb2 "$fxr" PATH="$farm" || rc=$?
+  diff <(sed '/^meta/d' "$tmp/r4/state/last.tsv") <(sed '/^meta/d' "$tmp/bb2/state/last.tsv"); check "busybox ash: the account/taxpayer layout gives the same state as GNU (rc=$rc)" $?
 else
   echo "skip - busybox not found at $BUSYBOX (set BUSYBOX=...)"
 fi
