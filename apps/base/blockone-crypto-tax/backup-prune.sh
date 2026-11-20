@@ -6,8 +6,11 @@
 #
 # A backup SET is everything that carries one stamp: blockone-db-<stamp>.dump, blockone-data-<stamp>.tar.gz and,
 # for a pre-release set only, blockone-predeploy-<stamp>.marker (written by the backup job when its Job name is
-# bk-predeploy-* or bk-prerollback-*, i.e. started by promote.sh / rollback.sh). A set with no marker is a nightly
-# set, so anything unrecognised is kept for the long period: the failure direction is "keep too much".
+# bk-predeploy-*, i.e. started by promote.sh). A set with no marker is a nightly set, so anything unrecognised is
+# kept for the long period: the failure direction is "keep too much". Pre-rollback sets (bk-prerollback-*) are NOT
+# marked: the app tells the owner they hold the only copy of dropped agreement signatures and live 35 days.
+# Only paths of the form YYYY/MM/DD/blockone-<kind>-<stamp>.<ext> belong to a set (not .partial files, not files
+# in other folders, not copy-blockone-... names).
 #
 #   pre-release sets: deleted when older than PREDEPLOY_DAYS (7)
 #   nightly sets:     deleted when older than NIGHTLY_DAYS (35)
@@ -19,6 +22,9 @@
 #   - files that are not part of a recognised set
 # A set is complete when it has both the dump and the archive.
 #
+# A delete the bucket refuses because of an object lock (the error text mentions lock or retention) is logged as
+# "prune: skipped (locked) <path>" and does not fail the run; any other failed delete stops the run with exit 1.
+#
 # Refuses to delete anything (exit 1) when: the listing is empty or fails, no set can be read from it, the clock
 # is before 2026 or more than 2 days behind the newest set, nothing complete would remain, or more than
 # MAX_DELETE_SETS (60) sets would go in one run.
@@ -26,11 +32,11 @@ set -eu
 
 remote=${1:?usage: backup-prune.sh <remote:>}
 rclone_bin=${RCLONE:-rclone}
-predeploy_days=${PREDEPLOY_DAYS:-7}
-nightly_days=${NIGHTLY_DAYS:-35}
-keep_nightly=${KEEP_NIGHTLY:-3}
-keep_predeploy=${KEEP_PREDEPLOY:-5}
-max_delete=${MAX_DELETE_SETS:-60}
+predeploy_days=${PREDEPLOY_DAYS-7}
+nightly_days=${NIGHTLY_DAYS-35}
+keep_nightly=${KEEP_NIGHTLY-3}
+keep_predeploy=${KEEP_PREDEPLOY-5}
+max_delete=${MAX_DELETE_SETS-60}
 dry=${DRY_RUN:-0}
 
 # stamps as numbers (YYYYMMDDTHHMMSSZ -> YYYYMMDDHHMMSS) so they compare with -lt / -gt in any sh
@@ -59,8 +65,8 @@ trap 'rm -rf "$work"' EXIT
 
 # stamp kind(P|N) complete(C|I), oldest first
 awk '
-  match($0, /blockone-(db|data|predeploy)-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z\.(dump|tar\.gz|marker)$/) {
-    f = substr($0, RSTART)
+  match($0, /^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]\/blockone-(db|data|predeploy)-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z\.(dump|tar\.gz|marker)$/) {
+    f = substr($0, 12)
     n = split(f, a, "-")
     s = substr(a[3], 1, 16)
     ext = substr(a[3], 18)
@@ -71,7 +77,8 @@ awk '
     seen[s] = 1
   }
   END { for (s in seen) print s, (s in p ? "P" : "N"), ((s in d) && (s in t) ? "C" : "I") }
-' "$work/listing" | sort > "$work/sets"
+' "$work/listing" > "$work/sets.unsorted" || die "could not read the listing"
+sort "$work/sets.unsorted" > "$work/sets" || die "could not sort the sets"
 [ -s "$work/sets" ] || die "no backup set could be read from the listing of $remote"
 
 newest=$(awk '{ s = $1 } END { print s }' "$work/sets")
@@ -82,10 +89,11 @@ newest_complete=$(awk '$3 == "C" { s = $1 } END { print s }' "$work/sets")
 # the stamps that are protected by count: newest first
 : > "$work/protected"
 tac_sets() { awk '{ l[NR] = $0 } END { for (i = NR; i >= 1; i--) print l[i] }' "$work/sets"; }
-tac_sets | awk -v kn="$keep_nightly" -v kp="$keep_predeploy" '
+tac_sets > "$work/sets.newest-first" || die "could not order the sets"
+awk -v kn="$keep_nightly" -v kp="$keep_predeploy" '
   $3 == "C" && $2 == "N" && nn < kn { nn++; print $1 }
   $3 == "C" && $2 == "P" && pp < kp { pp++; print $1 }
-' > "$work/protected"
+' "$work/sets.newest-first" > "$work/protected"
 echo "$newest_complete" >> "$work/protected"
 
 : > "$work/delete"
@@ -101,6 +109,7 @@ while read -r stamp kind complete; do
   fi
 done < "$work/sets"
 
+locked=0
 ndel=$(wc -l < "$work/delete")
 [ "$ndel" -le "$max_delete" ] || die "$ndel sets would be deleted, more than MAX_DELETE_SETS=$max_delete"
 if [ "$ndel" -gt 0 ]; then
@@ -115,10 +124,24 @@ if [ "$dry" = 1 ]; then
 fi
 
 while read -r stamp; do
-  grep -E "blockone-(db|data|predeploy)-$stamp\.(dump|tar\.gz|marker)$" "$work/listing" > "$work/files"
+  grep -E "^[0-9]{4}/[0-9]{2}/[0-9]{2}/blockone-(db|data|predeploy)-$stamp\.(dump|tar\.gz|marker)$" "$work/listing" > "$work/files" || die "no files found for set $stamp"
   while read -r path; do
     echo "deleting $remote$path"
-    "$rclone_bin" deletefile "$remote$path"
+    if err=$("$rclone_bin" deletefile "$remote$path" 2>&1); then
+      :
+    else
+      case $err in
+        *[Ll]ock* | *[Rr]etention*)
+          echo "prune: skipped (locked) $path"
+          locked=$((locked + 1))
+          ;;
+        *)
+          echo "$err" >&2
+          echo "prune: FAILED to delete $remote$path" >&2
+          exit 1
+          ;;
+      esac
+    fi
   done < "$work/files"
 done < "$work/delete"
-echo "prune: $ndel set(s) deleted"
+echo "prune: $ndel set(s) processed, $locked file(s) skipped (locked)"
