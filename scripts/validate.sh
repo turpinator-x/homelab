@@ -42,3 +42,6 @@ echo "== BlockOne alert rules (promtool)"
 
 echo "== Backup retention (prune logic against synthetic listings)"
 ./scripts/test-backup-prune.sh
+
+echo "== Backup manifests (exit-17 wiring, memory volumes, upload script behaviour)"
+./scripts/test-backup-manifest.sh

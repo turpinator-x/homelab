@@ -22,8 +22,8 @@
 #   - files that are not part of a recognised set
 # A set is complete when it has both the dump and the archive.
 #
-# A delete the bucket refuses because of an object lock (the error text mentions lock or retention) is logged as
-# "prune: skipped (locked) <path>" and does not fail the run; any other failed delete stops the run with exit 1.
+# Any failed delete prints rclone's error text and stops the run with exit 1 (nothing is swallowed; a bucket lock
+# longer than the 7-day pre-release life therefore fails the nightly prune loudly, by design).
 #
 # Refuses to delete anything (exit 1) when: the listing is empty or fails, no set can be read from it, the clock
 # is before 2026 or more than 2 days behind the newest set, nothing complete would remain, or more than
@@ -109,7 +109,6 @@ while read -r stamp kind complete; do
   fi
 done < "$work/sets"
 
-locked=0
 ndel=$(wc -l < "$work/delete")
 [ "$ndel" -le "$max_delete" ] || die "$ndel sets would be deleted, more than MAX_DELETE_SETS=$max_delete"
 if [ "$ndel" -gt 0 ]; then
@@ -127,21 +126,15 @@ while read -r stamp; do
   grep -E "^[0-9]{4}/[0-9]{2}/[0-9]{2}/blockone-(db|data|predeploy)-$stamp\.(dump|tar\.gz|marker)$" "$work/listing" > "$work/files" || die "no files found for set $stamp"
   while read -r path; do
     echo "deleting $remote$path"
-    if err=$("$rclone_bin" deletefile "$remote$path" 2>&1); then
-      :
-    else
-      case $err in
-        *[Ll]ock* | *[Rr]etention*)
-          echo "prune: skipped (locked) $path"
-          locked=$((locked + 1))
-          ;;
-        *)
-          echo "$err" >&2
-          echo "prune: FAILED to delete $remote$path" >&2
-          exit 1
-          ;;
-      esac
+    # A failed delete is always loud: rclone's own error text is printed, and the run exits 1. There is no
+    # "locked" special case: with an R2 bucket lock of 6 days or less, pre-release sets (7 days) and nightly sets
+    # (35 days) are never younger than the lock, so a refused delete means something is wrong (a longer lock, a
+    # wrong token, a network or disk fault) and must be seen.
+    if ! err=$("$rclone_bin" deletefile "$remote$path" 2>&1); then
+      echo "prune: rclone said: $err" >&2
+      echo "prune: FAILED to delete $remote$path" >&2
+      exit 1
     fi
   done < "$work/files"
 done < "$work/delete"
-echo "prune: $ndel set(s) processed, $locked file(s) skipped (locked)"
+echo "prune: $ndel set(s) deleted"

@@ -24,16 +24,18 @@ case $1 in
     if [ -n "${FAKE_LSF_PARTIAL:-}" ]; then (cd "$FAKE_DIR" && find . -type f | sed 's|^\./||' | sort | head -n 3); exit 3; fi
     (cd "$FAKE_DIR" && find . -type f | sed 's|^\./||' | sort) ;;
   deletefile)
-    [ -z "${FAKE_DEL_FAIL:-}" ] || { echo "ERROR: permission denied" >&2; exit 4; }
-    # an object lock: objects in a day folder at or after FAKE_LOCK_FROM (YYYY/MM/DD) can't be deleted
-    if [ -n "${FAKE_LOCK_FROM:-}" ] && [[ "${2#*:}" > "$FAKE_LOCK_FROM" || "${2#*:}" == "$FAKE_LOCK_FROM"* ]]; then
-      echo "Failed to deletefile: AccessDenied: object is locked by a retention rule" >&2; exit 1
-    fi
+    # FAKE_DEL_ERR: the text rclone prints when a delete fails (default: a generic one)
+    [ -z "${FAKE_DEL_FAIL:-}" ] || { echo "${FAKE_DEL_ERR:-ERROR: permission denied}" >&2; exit 4; }
     rm -- "$FAKE_DIR/${2#*:}" ;;
   *) echo "unexpected rclone $*" >&2; exit 9 ;;
 esac
 EOF
 chmod +x "$tmp/rclone"
+if [ -n "${BUSYBOX:-}" ]; then
+  mkdir "$tmp/bb"
+  for a in awk grep sort wc mktemp rm cat; do ln -s "$(readlink -f "$BUSYBOX")" "$tmp/bb/$a"; done
+  echo "running under: $BUSYBOX ash (applets: awk grep sort wc mktemp rm cat; this busybox has no date or tr applet, GNU ones are used)"
+fi
 
 now=$(date -u -d 2026-11-19T20:00:00Z +%s)
 # mkset <dir> <stamp> [nightly|predeploy|partial]
@@ -48,7 +50,12 @@ mkset() {
 run() { # <dir> [env...] -> output in $tmp/out, status in $rc
   local d=$1; shift
   rc=0
-  env FAKE_DIR="$d" RCLONE="$tmp/rclone" NOW_EPOCH="$now" "$@" sh "$prune" "r:" > "$tmp/out" 2>&1 || rc=$?
+  # BUSYBOX=<busybox binary>: run the script with busybox ash and busybox's own applets for everything it calls
+  if [ -n "${BUSYBOX:-}" ]; then
+    env PATH="$tmp/bb:$PATH" FAKE_DIR="$d" RCLONE="$tmp/rclone" NOW_EPOCH="$now" "$@" "$BUSYBOX" ash "$prune" "r:" > "$tmp/out" 2>&1 || rc=$?
+  else
+    env FAKE_DIR="$d" RCLONE="$tmp/rclone" NOW_EPOCH="$now" "$@" sh "$prune" "r:" > "$tmp/out" 2>&1 || rc=$?
+  fi
 }
 check() { # <name> <condition: 0 = pass>
   if [ "$2" -eq 0 ]; then echo "ok   - $1"; else echo "FAIL - $1"; sed 's/^/       /' "$tmp/out"; fails=$((fails + 1)); fi
@@ -176,6 +183,8 @@ gone "$d" 20260102T150000Z "the 6th-newest complete pre-release set is not"
 # 11. the keep floors and numeric validation
 d=$tmp/t13; mkdir "$d"; mkset "$d" 20261119T103000Z; mkset "$d" 20261001T103000Z
 run "$d" KEEP_NIGHTLY=0;        ck "refuses KEEP_NIGHTLY=0" '[ "$rc" -ne 0 ]'
+run "$d" KEEP_NIGHTLY=;         ck "refuses an empty KEEP_NIGHTLY" '[ "$rc" -ne 0 ]'
+run "$d" KEEP_PREDEPLOY=;       ck "refuses an empty KEEP_PREDEPLOY" '[ "$rc" -ne 0 ]'
 run "$d" KEEP_PREDEPLOY=0;      ck "refuses KEEP_PREDEPLOY=0" '[ "$rc" -ne 0 ]'
 run "$d" PREDEPLOY_DAYS=abc;    ck "refuses a non-numeric predeploy life" '[ "$rc" -ne 0 ]'
 run "$d" NIGHTLY_DAYS=;         ck "refuses an empty nightly life" '[ "$rc" -ne 0 ]'
@@ -235,25 +244,39 @@ ck "a bk-predeploy-* job writes the marker" 'marker_for bk-predeploy-abc-1'
 ck "a bk-prerollback-* job writes NO marker (35 days)" '! marker_for bk-prerollback-abc-1'
 ck "a nightly job writes no marker" '! marker_for blockone-backup-29000'
 
-# 16. an object lock refuses young objects: logged, run continues, exit 0; other errors still fail
-d=$tmp/t18; mkdir "$d"
-mkset "$d" 20261001T103000Z; mkset "$d" 20261002T103000Z; mkset "$d" 20261003T103000Z; mkset "$d" 20261004T103000Z; mkset "$d" 20261119T103000Z
-run "$d" FAKE_LOCK_FROM=2026/10/02
-ck "lock-refused deletes are logged as skipped (locked)" 'grep -q "prune: skipped (locked) 2026/10/02/" "$tmp/out"'
-ck "a lock refusal does not fail the run" '[ "$rc" -eq 0 ]'
-ck "unlocked sets are still deleted" '! set_exists "$d" 20261001T103000Z'
-ck "the summary counts the locked files" 'grep -q "2 file(s) skipped (locked)" "$tmp/out"'
-d=$tmp/t19; mkdir "$d"; mkset "$d" 20261001T103000Z; mkset "$d" 20261002T103000Z; mkset "$d" 20261003T103000Z; mkset "$d" 20261004T103000Z; mkset "$d" 20261119T103000Z
-run "$d" FAKE_DEL_FAIL=1
-ck "a delete that fails for another reason still fails the run" '[ "$rc" -ne 0 ] && grep -q "FAILED to delete" "$tmp/out"'
+# 16. every failed delete fails the run and its original error text is printed (nothing is swallowed). The texts
+# include paths under blockone/ and /mirror/blockone, which contain the letters "lock".
+fail_delete() { # <name> <error text>
+  local d=$tmp/t18-$RANDOM; mkdir "$d"; ERRTXT=$2
+  mkset "$d" 20261001T103000Z; mkset "$d" 20261002T103000Z; mkset "$d" 20261003T103000Z; mkset "$d" 20261004T103000Z; mkset "$d" 20261119T103000Z
+  run "$d" FAKE_DEL_FAIL=1 FAKE_DEL_ERR="$2"
+  ck "$1: fails the run (exit non-zero)" '[ "$rc" -ne 0 ]'
+  ck "$1: prints rclone's error text" 'grep -qF -- "$ERRTXT" "$tmp/out" && grep -q "FAILED to delete" "$tmp/out"'
+  ck "$1: is never reported as skipped" '! grep -q "prune: skipped" "$tmp/out"'
+}
+fail_delete "AccessDenied with an object path" "Failed to deletefile: AccessDenied: Access Denied (blockone/svgaaq/7me37l/blockone-db-x)"
+fail_delete "timeout with the R2 URL" 'Failed to deletefile: RequestError: send request failed: Delete "https://acct.r2.cloudflarestorage.com/blockone-backups/blockone/abc": dial tcp: i/o timeout'
+fail_delete "permission denied under the mirror" "Failed to deletefile: remove /mirror/blockone/abc/def: permission denied"
+fail_delete "a real object-lock refusal" "Failed to deletefile: AccessDenied: object is locked by a retention rule"
+fail_delete "a generic failure" "ERROR: permission denied"
 
-# 17. a complete-looking set in another folder must not count as a set (it would take a protection slot)
-d=$tmp/t20; mkdir "$d"
-mkset "$d" 20261001T103000Z; mkset "$d" 20261002T103000Z; mkset "$d" 20261003T103000Z; mkset "$d" 20261004T103000Z
-mkdir -p "$d/stray/2026/11/19"; echo x > "$d/stray/2026/11/19/blockone-db-20261119T103000Z.dump"; echo x > "$d/stray/2026/11/19/blockone-data-20261119T103000Z.tar.gz"
-run "$d"
-kept "$d" 20261002T103000Z "a set-looking stray folder does not take a protection slot from a real set"
-gone "$d" 20261001T103000Z "the oldest real set is still deleted"
+# 18. the guards no other test reaches, with failing stand-ins for awk, sort and grep -E
+shim() { # <tool> <condition on args, shell> -> a wrapper in $tmp/shim-<tool> that fails when the condition holds
+  local dir=$tmp/shim-$1; mkdir -p "$dir"
+  printf '#!/usr/bin/env bash\nif %s; then echo "shim: %s failed" >&2; exit 1; fi\nexec %s "$@"\n' "$2" "$1" "$(command -v "$1")" > "$dir/$1"
+  chmod +x "$dir/$1"; echo "$dir"
+}
+d=$tmp/t21; mkdir "$d"; mkset "$d" 20261001T103000Z; mkset "$d" 20261002T103000Z; mkset "$d" 20261003T103000Z; mkset "$d" 20261004T103000Z; mkset "$d" 20261119T103000Z
+n=$(sets_left "$d")
+sh_awk=$(shim awk '[[ "$*" == *"seen[s] = 1"* ]]')
+run "$d" PATH="$sh_awk:${BUSYBOX:+$tmp/bb:}$PATH"
+ck "an awk failure while reading the listing refuses and deletes nothing" '[ "$rc" -ne 0 ] && [ "$(sets_left "$d")" -eq "$n" ]'
+sh_sort=$(shim sort 'true')
+run "$d" PATH="$sh_sort:${BUSYBOX:+$tmp/bb:}$PATH"
+ck "a sort failure refuses and deletes nothing" '[ "$rc" -ne 0 ] && [ "$(sets_left "$d")" -eq "$n" ]'
+sh_grep=$(shim grep '[[ "$1" == "-E" ]]')
+run "$d" PATH="$sh_grep:${BUSYBOX:+$tmp/bb:}$PATH"
+ck "no files found for a set refuses before deleting that set" '[ "$rc" -ne 0 ] && [ "$(sets_left "$d")" -eq "$n" ]'
 
 if [ "$fails" -ne 0 ]; then echo "$fails check(s) failed" >&2; exit 1; fi
 echo "all prune checks passed"

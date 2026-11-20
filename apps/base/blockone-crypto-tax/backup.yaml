@@ -189,7 +189,9 @@ spec:
                       ;;
                     *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
                   esac
-                  rclone lsf -R --files-only backup: | sort | tail -n 4
+                  # the final listing is informational, but its failure must not hide a prune failure's exit 17
+                  rclone lsf -R --files-only backup: > /tmp/final-listing || { echo "final listing FAILED" >&2; step_rc=17; }
+                  sort /tmp/final-listing | tail -n 4
                   exit "$step_rc"
               env:
                 - name: JOB_NAME
@@ -279,11 +281,11 @@ spec:
                 readOnly: true
             - name: work
               # Memory-backed: the plain dump and archive never touch a disk. Measured 2026-11-19: a 452 MB archive
-              # (growing about 88 MiB/day since 11-15, mostly from one pre-release copy per promotion; the 7-day
-              # prune should flatten it) and a 125 KB dump. 3 Gi leaves about 4 weeks at that rate. The jobs log
-              # "work: used X of Y MiB" (WARNING from 70%). If a set outgrows it, tar fails with "No space left on
-              # device" and the run fails loudly; raise this and the archive container's limit together
-              # (limit = sizeLimit + 512Mi).
+              # and a 125 KB dump. The archive grew in four discrete steps of about 88 MiB (11-16 to 11-19, roughly
+              # 1,500 to 2,000 files each): cause unknown, owner check: du -sk /data/cases/* from the API pod. The
+              # 7-day prune does not shrink it. The jobs log "work: used X of Y MiB" (WARNING from 70%). If a set
+              # outgrows the volume, tar fails with "No space left on device" and the run fails loudly; raise this
+              # and the archive container's limit together (limit = sizeLimit + 512Mi).
               emptyDir:
                 medium: Memory
                 sizeLimit: 3Gi
@@ -513,8 +515,9 @@ spec:
                 claimName: blockone-backup-mirror
             - name: verify
               # Memory-backed (pisrv01 has 8 GB, about 5.2 GB available at the 7-day minimum): the decrypted copy never
-              # touches the Pi's SD card. Smaller than the upload job's volume on purpose: 2 Gi is about 15 days of
-              # archive growth at the current rate. Raise it with the Pi's headroom in view.
+              # touches the Pi's SD card. Smaller than the upload job's volume on purpose (the Pi's headroom): if the
+              # archive passes 2 Gi the mirror's check fails while the backup still succeeds. Raise it with the Pi's
+              # headroom in view.
               emptyDir:
                 medium: Memory
                 sizeLimit: 2Gi

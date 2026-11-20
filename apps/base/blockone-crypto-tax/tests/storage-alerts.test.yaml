@@ -99,3 +99,41 @@ tests:
               summary: "Disk on node b:9100 is 90% full"
               description: "Free space on / is under 25%. minisrv01 holds the case files, PostgreSQL and the backup work; pisrv01 holds the backup mirror. Check: kubectl --context homelab -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090, then node_filesystem_avail_bytes."
               runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+  - name: just above 75% warns, just below stays quiet (0.755 vs 0.745), exactly on the for-durations
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="hi:9100", mountpoint="/", fstype="ext4"}'
+        values: '1000x40'
+      - series: 'node_filesystem_avail_bytes{instance="hi:9100", mountpoint="/", fstype="ext4"}'
+        values: '245x40'
+      - series: 'node_filesystem_size_bytes{instance="lo:9100", mountpoint="/", fstype="ext4"}'
+        values: '1000x40'
+      - series: 'node_filesystem_avail_bytes{instance="lo:9100", mountpoint="/", fstype="ext4"}'
+        values: '255x40'
+    alert_rule_test:
+      - {eval_time: 14m, alertname: BlockOneNodeDiskWarning, exp_alerts: []}
+      - eval_time: 15m
+        alertname: BlockOneNodeDiskWarning
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: "hi:9100", mountpoint: /, fstype: ext4}
+            exp_annotations:
+              summary: "Disk on node hi:9100 is 75.5% full"
+              description: "Free space on / is under 25%. minisrv01 holds the case files, PostgreSQL and the backup work; pisrv01 holds the backup mirror. Check: kubectl --context homelab -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090, then node_filesystem_avail_bytes."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+  - name: critical fires exactly after 5 minutes, not 4
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="c:9100", mountpoint="/", fstype="ext4"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{instance="c:9100", mountpoint="/", fstype="ext4"}'
+        values: '5x40'
+    alert_rule_test:
+      - {eval_time: 4m, alertname: BlockOneNodeDiskCritical, exp_alerts: []}
+      - eval_time: 5m
+        alertname: BlockOneNodeDiskCritical
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: "c:9100", mountpoint: /, fstype: ext4}
+            exp_annotations:
+              summary: "Disk on node c:9100 is 95% full"
+              description: "Free space on / is under 10%: new backups, uploads and the database can start failing. Free space now."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)
