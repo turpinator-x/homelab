@@ -13,6 +13,10 @@ spec:
     - name: http
       port: 8000
       targetPort: http
+    # Prometheus only (servicemonitor.yaml). The tunnel's ingress rules name port 8000, so this is never public
+    - name: metrics
+      port: 9464
+      targetPort: metrics
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,6 +84,8 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+            - name: metrics # BLOCKONE_WEB_METRICS_PORT (kustomization.yaml)
+              containerPort: 9464
           envFrom:
             - configMapRef:
                 name: blockone-settings

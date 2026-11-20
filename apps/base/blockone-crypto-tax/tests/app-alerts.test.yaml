@@ -1,0 +1,262 @@
+# promtool test rules for app-alerts.yaml (run: scripts/test-blockone-alerts.sh, which extracts the rules next to
+# this file's copy). Each alert has a case that fires and, where a false alarm is likely, one that must stay quiet.
+rule_files:
+  - ../app-alerts.rules.yaml
+evaluation_interval: 1m
+tests:
+  # API scrape gone for 10 minutes
+  - name: metrics down fires after 10 minutes of no successful scrape
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="blockone-crypto-tax", job="blockone-api"}'
+        values: '1x5 0x20'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BlockOneMetricsDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: BlockOneMetricsDown
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: Prometheus has not scraped the BlockOne API for 10 minutes
+              description: "kubectl --context homelab -n blockone-crypto-tax get pods; then check the Prometheus Targets page for blockone-api"
+  - name: metrics down stays quiet while the scrape works
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="blockone-crypto-tax", job="blockone-api"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: BlockOneMetricsDown
+        exp_alerts: []
+  # Readiness: the api pod fails, a finished backup pod (not matched) is "not ready" and must not alert
+  - name: pod not ready fires for the api, not for backup pods
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="blockone-crypto-tax", condition="true", pod="blockone-api-abc-123"}'
+        values: '0x20'
+      - series: 'kube_pod_status_ready{namespace="blockone-crypto-tax", condition="true", pod="blockone-backup-29000-xyz"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BlockOnePodNotReady
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BlockOnePodNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: blockone-crypto-tax
+              condition: "true"
+              pod: blockone-api-abc-123
+            exp_annotations:
+              summary: "blockone-api-abc-123 has not been ready for 10 minutes"
+              description: "kubectl --context homelab -n blockone-crypto-tax describe pod blockone-api-abc-123"
+  - name: postgres statefulset pod not ready fires
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="blockone-crypto-tax", condition="true", pod="blockone-postgres-0"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BlockOnePodNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: blockone-crypto-tax
+              condition: "true"
+              pod: blockone-postgres-0
+            exp_annotations:
+              summary: "blockone-postgres-0 has not been ready for 10 minutes"
+              description: "kubectl --context homelab -n blockone-crypto-tax describe pod blockone-postgres-0"
+  - name: crash loop fires after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{namespace="blockone-crypto-tax", reason="CrashLoopBackOff", pod="blockone-worker-aaa-bbb", container="worker"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BlockOnePodCrashLooping
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BlockOnePodCrashLooping
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: blockone-crypto-tax
+              reason: CrashLoopBackOff
+              pod: blockone-worker-aaa-bbb
+              container: worker
+            exp_annotations:
+              summary: "blockone-worker-aaa-bbb (worker) has been in CrashLoopBackOff for 5 minutes"
+              description: "kubectl --context homelab -n blockone-crypto-tax logs blockone-worker-aaa-bbb -c worker --previous"
+  - name: restarts fire at three in an hour, one restart stays quiet
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax", pod="blockone-api-a", container="api"}'
+        values: '0x10 1x5 2x5 4x40'
+      - series: 'kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax", pod="blockone-worker-a", container="worker"}'
+        values: '0x10 1x50'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: BlockOnePodRestarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              pod: blockone-api-a
+              container: api
+            exp_annotations:
+              summary: "blockone-api-a (api) restarted 3 or more times in an hour"
+              description: "kubectl --context homelab -n blockone-crypto-tax logs blockone-api-a -c api --previous"
+  - name: oom killed fires only with a recent restart
+    interval: 1m
+    input_series:
+      # api: OOMKilled and restarted at minute 10. worker: OOMKilled long ago, no recent restart
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="blockone-crypto-tax", reason="OOMKilled", pod="blockone-api-a", container="api"}'
+        values: '1x40'
+      - series: 'kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax", pod="blockone-api-a", container="api"}'
+        values: '3x10 4x30'
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="blockone-crypto-tax", reason="OOMKilled", pod="blockone-worker-a", container="worker"}'
+        values: '1x40'
+      - series: 'kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax", pod="blockone-worker-a", container="worker"}'
+        values: '2x40'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BlockOneContainerOOMKilled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              reason: OOMKilled
+              pod: blockone-api-a
+              container: api
+            exp_annotations:
+              summary: "blockone-api-a (api) was killed for running out of memory"
+              description: "The container hit its memory limit. Raise the limit in Git only after checking what grew (kubectl top pod, the job that ran)"
+      - eval_time: 35m
+        alertname: BlockOneContainerOOMKilled
+        exp_alerts: []
+  - name: memory near limit fires above 90 percent for 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="blockone-crypto-tax", pod="blockone-api-a", container="api"}'
+        values: '720000000x30'
+      - series: 'kube_pod_container_resource_limits{namespace="blockone-crypto-tax", pod="blockone-api-a", container="api", resource="memory"}'
+        values: '768000000x30'
+      - series: 'container_memory_working_set_bytes{namespace="blockone-crypto-tax", pod="blockone-worker-a", container="worker"}'
+        values: '100000000x30'
+      - series: 'kube_pod_container_resource_limits{namespace="blockone-crypto-tax", pod="blockone-worker-a", container="worker", resource="memory"}'
+        values: '768000000x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BlockOneMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: BlockOneMemoryNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: blockone-crypto-tax
+              pod: blockone-api-a
+              container: api
+            exp_annotations:
+              summary: "blockone-api-a (api) is above 90% of its memory limit"
+  - name: cpu high is info severity
+    interval: 1m
+    input_series:
+      # 1.5 cores: the counter grows by 90 CPU-seconds a minute
+      - series: 'container_cpu_usage_seconds_total{namespace="blockone-crypto-tax", pod="blockone-worker-a", container="worker"}'
+        values: '0+90x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: BlockOneCPUHigh
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              namespace: blockone-crypto-tax
+              pod: blockone-worker-a
+              container: worker
+            exp_annotations:
+              summary: "blockone-worker-a (worker) has used more than one CPU core for 30 minutes"
+  # HTTP 5xx: a counter that grows 1 a minute for 20 minutes, then stops
+  - name: api errors count fires, and the rate alert needs volume
+    interval: 1m
+    input_series:
+      - series: 'blockone_http_requests_total{namespace="blockone-crypto-tax", method="GET", route="/x", status="5xx"}'
+        values: '0+1x20 20x20'
+      - series: 'blockone_http_requests_total{namespace="blockone-crypto-tax", method="GET", route="/x", status="2xx"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BlockOneAPIErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The API returned more than 5 server errors (5xx) in 15 minutes
+              description: "kubectl --context homelab -n blockone-crypto-tax logs deploy/blockone-api --since=30m"
+      - eval_time: 40m
+        alertname: BlockOneAPIErrors
+        exp_alerts: []
+      # 5xx are 50% of 20 requests a minute-ish: 10 + 10 requests in 10m is below the 20 floor only at the start
+      - eval_time: 20m
+        alertname: BlockOneAPIErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: More than 5% of API requests have failed with 5xx for 10 minutes
+              description: "kubectl --context homelab -n blockone-crypto-tax logs deploy/blockone-api --since=30m"
+  - name: a lone failure at night stays quiet
+    interval: 1m
+    input_series:
+      - series: 'blockone_http_requests_total{namespace="blockone-crypto-tax", method="GET", route="/x", status="5xx"}'
+        values: '0x10 1x40'
+      - series: 'blockone_http_requests_total{namespace="blockone-crypto-tax", method="GET", route="/x", status="2xx"}'
+        values: '0x50'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: BlockOneAPIErrorRateHigh
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: BlockOneAPIErrors
+        exp_alerts: []
+  - name: jobs gave up fires, retries pending needs an hour, health alert fires
+    interval: 1m
+    input_series:
+      - series: 'blockone_job_retries_gave_up_24h{namespace="blockone-crypto-tax"}'
+        values: '0x5 2x120'
+      - series: 'blockone_job_retries_pending{namespace="blockone-crypto-tax"}'
+        values: '1x120'
+      - series: 'blockone_health_alert{namespace="blockone-crypto-tax"}'
+        values: '0x5 1x120'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BlockOneJobsGaveUp
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: BlockOneJobsGaveUp
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "2 job(s) used up their automatic retries in the last 24 hours"
+              description: "Admin -> Health in the app lists them. Retries are in docs/status.md (BLOCKONE_WEB_RETRY_MAX)"
+      - eval_time: 50m
+        alertname: BlockOneJobRetriesPending
+        exp_alerts: []
+      - eval_time: 65m
+        alertname: BlockOneJobRetriesPending
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "1 job retry(ies) have been waiting for over an hour"
+              description: "Admin -> Health shows the provider that is failing"
+      - eval_time: 12m
+        alertname: BlockOneHealthAlert
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: The app's own health check has stayed red past its alert threshold
+              description: "Open Admin -> Health in the app for the failing provider or job"

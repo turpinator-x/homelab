@@ -33,6 +33,16 @@ spec:
               app: cloudflared
       ports:
         - port: http
+    # Prometheus (kube-prometheus-stack, namespace monitoring) scraping /metrics, and only that port. Prometheus's
+    # own pod label is not matched on purpose: the chart's labels can change, and nothing else runs in monitoring
+    # that this app needs to refuse
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: metrics
+          protocol: TCP
   egress:
     # DNS
     - to:

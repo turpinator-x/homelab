@@ -58,6 +58,15 @@ patches:
       kind: PrometheusRule
       metadata:
         name: unused
+  # The app alerts name production's namespace and would page for staging's synthetic data. The ServiceMonitor stays:
+  # staging's /metrics is scraped (same port, same NetworkPolicy rule), so it can be looked at in Prometheus
+  - target: {kind: PrometheusRule, name: blockone-app}
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: unused
   - target: {kind: NetworkPolicy, name: "blockone-backup|blockone-backup-mirror"}
     patch: |-
       $patch: delete

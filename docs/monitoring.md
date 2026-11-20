@@ -77,7 +77,7 @@ At install (2026-10-20): all 18 targets up, including node-exporter on both node
 - Prometheus keeps its data in an `emptyDir`, so a restart loses metric history (retention is 10 days). A PersistentVolumeClaim via `prometheus.prometheusSpec.storageSpec` is the next step.
 - Prometheus and Alertmanager are still only reachable through `kubectl port-forward`.
 - Grafana also still answers on plain HTTP; redirecting to HTTPS is a Traefik middleware away.
-- Only BlockOne backup alerts and `severity=critical` alerts notify (Telegram); warnings are visible in the Alertmanager UI only.
+- Only BlockOne alerts (`warning` and `critical`) and other `severity=critical` alerts notify (Telegram); other warnings and all `info` alerts are visible in the Alertmanager UI only.
 
 ## Alerting
 
@@ -87,6 +87,7 @@ Alertmanager's config is in the HelmRelease values (`monitoring/controllers/base
 |---|---|---|
 | `Watchdog`, `InfoInhibitor` | `null` | |
 | `BlockOneBackup*` (any severity) | `telegram` | 24 h |
+| `BlockOne*` with `severity` warning or critical (app alerts, `apps/base/blockone-crypto-tax/app-alerts.yaml`) | `telegram` | 24 h |
 | any other `severity=critical` | `telegram` | 12 h |
 | everything else (warnings, info) | `null` (UI only) | |
 
