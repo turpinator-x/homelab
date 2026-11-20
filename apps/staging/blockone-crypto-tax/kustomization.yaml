@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 3f03cab: Merge pull request #134 from turpinator-x/feat/cpa-decision-file
+  # Built from the app repo's main 3c3ff20: Merge pull request #137 from turpinator-x/fix/upload-memory-cap
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-3f03cabe79c6f05fee390f408ffd86126fb1a5b2
-    digest: sha256:93ebe567e81a9cd0b51353da3743c654990e2799fd3bb73edb27865780757335
+    newTag: sha-3c3ff2089bf8bd9feaa9b3d2119730ea0d627955
+    digest: sha256:8ca676a29de0d09fcf531d14aaadd7f8032b09e831cd9c6c868c600989b24a6a
