@@ -1,0 +1,101 @@
+# promtool test rules for storage-alerts.yaml (run: scripts/test-blockone-alerts.sh). Fill is 1 - avail/size, so
+# 80 GB used of 100 GB is 0.80: a warning; 95 is critical; 70 is quiet. The two levels never fire together.
+rule_files:
+  - ../storage-alerts.rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: node disk 80% full warns after 15 minutes, not critical
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="192.168.1.224:9100", mountpoint="/", fstype="ext4"}'
+        values: '100000000000x40'
+      - series: 'node_filesystem_avail_bytes{instance="192.168.1.224:9100", mountpoint="/", fstype="ext4"}'
+        values: '20000000000x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BlockOneNodeDiskWarning
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: BlockOneNodeDiskWarning
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: "192.168.1.224:9100", mountpoint: /, fstype: ext4}
+            exp_annotations:
+              summary: "Disk on node 192.168.1.224:9100 is 80% full"
+              description: "Free space on / is under 25%. minisrv01 holds the case files, PostgreSQL and the backup work; pisrv01 holds the backup mirror. Check: kubectl --context homelab -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090, then node_filesystem_avail_bytes."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+      - eval_time: 30m
+        alertname: BlockOneNodeDiskCritical
+        exp_alerts: []
+  - name: node disk 70% full stays quiet
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="192.168.1.158:9100", mountpoint="/", fstype="ext4"}'
+        values: '100000000000x40'
+      - series: 'node_filesystem_avail_bytes{instance="192.168.1.158:9100", mountpoint="/", fstype="ext4"}'
+        values: '30000000000x40'
+    alert_rule_test:
+      - {eval_time: 35m, alertname: BlockOneNodeDiskWarning, exp_alerts: []}
+      - {eval_time: 35m, alertname: BlockOneNodeDiskCritical, exp_alerts: []}
+  - name: node disk 95% full is critical after 5 minutes and not also a warning
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="192.168.1.158:9100", mountpoint="/", fstype="ext4"}'
+        values: '100000000000x40'
+      - series: 'node_filesystem_avail_bytes{instance="192.168.1.158:9100", mountpoint="/", fstype="ext4"}'
+        values: '5000000000x40'
+    alert_rule_test:
+      - {eval_time: 3m, alertname: BlockOneNodeDiskCritical, exp_alerts: []}
+      - eval_time: 10m
+        alertname: BlockOneNodeDiskCritical
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: "192.168.1.158:9100", mountpoint: /, fstype: ext4}
+            exp_annotations:
+              summary: "Disk on node 192.168.1.158:9100 is 95% full"
+              description: "Free space on / is under 10%: new backups, uploads and the database can start failing. Free space now."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+      - {eval_time: 30m, alertname: BlockOneNodeDiskWarning, exp_alerts: []}
+  - name: tmpfs and other filesystems are ignored
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{instance="192.168.1.158:9100", mountpoint="/run", fstype="tmpfs"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{instance="192.168.1.158:9100", mountpoint="/run", fstype="tmpfs"}'
+        values: '1x40'
+    alert_rule_test:
+      - {eval_time: 35m, alertname: BlockOneNodeDiskCritical, exp_alerts: []}
+  - name: mirror volume 80% full warns, 95% is critical, other volumes and namespaces are ignored
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_used_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="blockone-backup-mirror"}'
+        values: '80x40'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="blockone-backup-mirror"}'
+        values: '100x40'
+      - series: 'kubelet_volume_stats_used_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="blockone-data"}'
+        values: '95x40'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="blockone-data"}'
+        values: '100x40'
+      - series: 'kubelet_volume_stats_used_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="models"}'
+        values: '99x40'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="blockone-crypto-tax", persistentvolumeclaim="models"}'
+        values: '100x40'
+      - series: 'kubelet_volume_stats_used_bytes{namespace="blockone-staging", persistentvolumeclaim="blockone-data"}'
+        values: '99x40'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="blockone-staging", persistentvolumeclaim="blockone-data"}'
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BlockOneVolumeFillWarning
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: blockone-crypto-tax, persistentvolumeclaim: blockone-backup-mirror}
+            exp_annotations:
+              summary: "Volume blockone-backup-mirror is 80% full"
+              description: "local-path volumes report their whole node filesystem, so this is node disk fill seen through this volume."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+      - eval_time: 20m
+        alertname: BlockOneVolumeFillCritical
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: blockone-crypto-tax, persistentvolumeclaim: blockone-data}
+            exp_annotations:
+              summary: "Volume blockone-data is 95% full"
+              description: "local-path volumes report their whole node filesystem, so the node is nearly full. Free space now."
+              runbook: docs/blockone-crypto-tax.md (Storage and alerts)

@@ -1,0 +1,70 @@
+# Disk and volume fill alerts for the nodes that hold the BlockOne data and its backups. The label is what this
+# Prometheus's ruleSelector matches. Warning at 75% and critical at 90% (R42 G2); names start with BlockOne so
+# Alertmanager sends them to Telegram (docs/monitoring.md, "Alerting").
+#
+# What each metric really measures (checked against the live Prometheus on 2026-11-19):
+#  - node_filesystem_*: the root filesystem of each node. minisrv01's is the 1 TB NVMe under the case files,
+#    PostgreSQL and the nightly work; pisrv01's is the SD card that holds the mirror volume (blockone-backup-mirror).
+#  - kubelet_volume_stats_*: for the local-path volumes this is the same whole filesystem again (the volume's
+#    "10Gi" is a request that local-path doesn't enforce), and the series exists only while a pod mounts the
+#    volume (the mirror volume: only during the 04:30 run). So these alerts agree with the node ones; they are
+#    kept to name the volume when it is the one filling up.
+#  - The mirror's own 10 Gi budget and the R2 bucket's 10 GB free allowance have no metric: the nightly jobs log a
+#    "size:" line (WARNING from 75%, CRITICAL from 90%); see docs/blockone-crypto-tax.md, "Storage and alerts".
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blockone-storage
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blockone-storage
+      rules:
+        - alert: BlockOneNodeDiskWarning
+          expr: |
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) > 0.75
+            and
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) <= 0.90
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disk on node {{ $labels.instance }} is {{ $value | humanizePercentage }} full"
+            description: "Free space on / is under 25%. minisrv01 holds the case files, PostgreSQL and the backup work; pisrv01 holds the backup mirror. Check: kubectl --context homelab -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090, then node_filesystem_avail_bytes."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+        - alert: BlockOneNodeDiskCritical
+          expr: |
+            (1 - node_filesystem_avail_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint="/", fstype=~"ext4|xfs|btrfs"}) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Disk on node {{ $labels.instance }} is {{ $value | humanizePercentage }} full"
+            description: "Free space on / is under 10%: new backups, uploads and the database can start failing. Free space now."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+        - alert: BlockOneVolumeFillWarning
+          expr: |
+            (kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}
+              / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}) > 0.75
+            and
+            (kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}
+              / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}) <= 0.90
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full"
+            description: "local-path volumes report their whole node filesystem, so this is node disk fill seen through this volume."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)
+        - alert: BlockOneVolumeFillCritical
+          expr: |
+            (kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}
+              / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"blockone-data|data-blockone-postgres-0|blockone-backup-mirror", namespace="blockone-crypto-tax"}) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full"
+            description: "local-path volumes report their whole node filesystem, so the node is nearly full. Free space now."
+            runbook: docs/blockone-crypto-tax.md (Storage and alerts)

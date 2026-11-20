@@ -85,16 +85,16 @@ Nightly, encrypted, in two places: a Cloudflare R2 bucket (off site) and pisrv01
 flowchart LR
   PG[(blockone-postgres)] -->|pg_dump -Fc| B
   D[(blockone-data<br>read-only)] -->|tar.gz| B
-  B[blockone-backup<br>03:30, minisrv01] -->|rclone crypt| R2[(R2 bucket<br>ciphertext only, 35 days)]
+  B[blockone-backup<br>03:30, minisrv01] -->|rclone crypt| R2[(R2 bucket<br>ciphertext only, nightly 35 days, pre-release 7)]
   R2 -->|rclone copy --immutable<br>read-only token| M[blockone-backup-mirror<br>04:30, pisrv01]
-  M --> MV[(mirror volume<br>ciphertext, 35 days)]
+  M --> MV[(mirror volume<br>ciphertext, nightly 35 days, pre-release 7)]
   M -->|decrypt last night's| V[pg_restore --list<br>tar -t]
 ```
 
 | Piece | Where | Notes |
 |---|---|---|
-| Backup | `backup.yaml`, CronJob `blockone-backup` | 03:30 America/Los_Angeles on minisrv01. initContainers `dump` (`pg_dump -Fc` over the Service, checked with `pg_restore --list`) and `archive` (tar of the whole volume, read-only), then `upload` (rclone: encrypt, upload to `YYYY/MM/DD/` in UTC, `cryptcheck` against the local files, delete anything older than 35 days) |
-| Mirror | `backup.yaml`, CronJob `blockone-backup-mirror`, PVC `blockone-backup-mirror` (10 Gi) | 04:30 on pisrv01. Copies the encrypted objects as they are, keeps 35 days, then decrypts last night's pair from its own copy and checks them: `pg_restore --list` must list table data, `tar -tzf` must read the archive. Fails if there's no dump newer than 30 hours |
+| Backup | `backup.yaml`, CronJob `blockone-backup` | 03:30 America/Los_Angeles on minisrv01. initContainers `dump` (`pg_dump -Fc` over the Service, checked with `pg_restore --list`) and `archive` (tar of the whole volume, read-only), then `upload` (rclone: encrypt, upload to `YYYY/MM/DD/` in UTC, `cryptcheck` against the local files; the nightly run then prunes with `backup-prune.sh`: see "Retention") |
+| Mirror | `backup.yaml`, CronJob `blockone-backup-mirror`, PVC `blockone-backup-mirror` (10 Gi) | 04:30 on pisrv01. Copies the encrypted objects as they are, prunes with the same script, then decrypts last night's pair from its own copy and checks them: `pg_restore --list` must list table data, `tar -tzf` must read the archive. Fails if there's no dump newer than 30 hours |
 | Alerts | `backup-alerts.yaml` | `BlockOneBackupStale` (more than 26 h since either CronJob last succeeded), `BlockOneBackupNeverSucceeded` (same, before a first success, when the metric doesn't exist yet), `BlockOneBackupJobFailed` (a run failed after its retry; shown for 24 h) |
 | App metrics and alerts | `servicemonitor.yaml`, `app-alerts.yaml`, `tests/app-alerts.test.yaml`, API container/Service port `metrics` (9464) | The API's own `/metrics` (aggregate counts, no user data) is scraped every 30 s by Prometheus; `BLOCKONE_WEB_METRICS_PORT=9464` is in `blockone-settings`. The port is on the pod network only: the tunnel's ingress rules name port 8000, and the API NetworkPolicy admits namespace `monitoring` to the `metrics` port besides cloudflared to `http`. The worker serves no metrics. Alerts (production namespace only; the staging overlay deletes the rule): `BlockOneMetricsDown`, `BlockOnePodNotReady`, `BlockOnePodCrashLooping` (critical); `BlockOnePodRestarting`, `BlockOneContainerOOMKilled`, `BlockOneMemoryNearLimit`, `BlockOneAPIErrors`, `BlockOneJobsGaveUp`, `BlockOneJobRetriesPending`, `BlockOneHealthAlert` (warning); `BlockOneAPIErrorRateHigh` (critical); `BlockOneCPUHigh` (info: there are no CPU limits to be near, so it never notifies). Warning and critical go to Telegram (`docs/monitoring.md`). Tests: `scripts/test-blockone-alerts.sh` (promtool, also run by `validate.sh`) |
 | Secrets | overlay `blockone-backup-secret.yaml.example`, `blockone-backup-mirror-secret.yaml.example` | R2 endpoint, bucket, token and the obscured crypt passwords; SOPS-encrypted once filled in |
@@ -225,6 +225,27 @@ Drilled on 2026-11-11 in a throwaway kind cluster (Kubernetes 1.37, three nodes;
 
 The first restore attempt found a bug, fixed before the passing run: tar can't change the mode of the volume's root (owned by root), so unpacking straight into `/data` failed after the files had already been moved aside. The Job now unpacks into a folder first and swaps afterwards.
 
+### Retention
+
+`apps/base/blockone-crypto-tax/backup-prune.sh` (a ConfigMap, mounted at `/scripts`; tested by `scripts/test-backup-prune.sh`) decides what goes, on R2 (the `blockone-backup` nightly run) and on the mirror volume (the `blockone-backup-mirror` nightly run).
+
+- A **set** is the files that share a stamp: `blockone-db-<stamp>.dump`, `blockone-data-<stamp>.tar.gz` and, for a pre-release set, `blockone-predeploy-<stamp>.marker`. The backup pod writes the marker when its Job name is `bk-predeploy-*` or `bk-prerollback-*` (what `promote.sh` and `rollback.sh` create); any other name makes a nightly set, so a surprise keeps data longer rather than shorter.
+- Pre-release sets are deleted after 7 days, nightly sets after 35. Never deleted whatever their age: the newest 3 complete nightly sets, the newest 5 complete pre-release sets (the one a rollback needs is the newest), the newest complete set of any kind, and files it doesn't recognise.
+- It refuses (exit 1, nothing deleted) on an empty or failed listing, a clock before 2026 or 2 days behind the newest set, no complete set, or more than 60 sets in one run. Minimum lives (7 and 35 days) can't be lowered through its settings.
+- Only the **nightly** runs prune. A `bk-predeploy-*` or `bkv-*` Job skips it, so a retention problem can never stop a release; it shows as a failed nightly job (`BlockOneBackupJobFailed`, then `BlockOneBackupStale`).
+- The marker is a separate small file in the same `YYYY/MM/DD` folder, so the log lines `promote.sh` reads and the `cryptcheck` of exactly the dump and archive are unchanged. Sets written before this change have no marker and age out at 35 days (late December for the last of them). Freeing R2 sooner would be a one-off, reviewed deletion of the old release-day sets (not done here).
+
+### Storage and alerts
+
+`storage-alerts.yaml` (rule `blockone-storage`): `BlockOneNodeDiskWarning` / `Critical` at 75% / 90% of `/` on each node (minisrv01's NVMe; pisrv01's SD card, which holds the mirror volume) and `BlockOneVolumeFillWarning` / `Critical` for `blockone-data`, `data-blockone-postgres-0` and `blockone-backup-mirror`. Caveat checked against the live Prometheus: local-path volumes report their whole node filesystem, and the mirror's series exists only while its pod runs, so the volume alerts mostly repeat the node ones with the volume's name. The mirror's own 10 Gi budget and R2's 10 GB free allowance have no metric: each nightly run logs `size: OK|WARNING|CRITICAL <store> holds N bytes, P% of its budget` (WARNING from 75%, CRITICAL from 90%). Read-only checks:
+
+```
+kubectl --context homelab -n blockone-crypto-tax logs job/$(kubectl --context homelab -n blockone-crypto-tax get jobs -o name | grep -o 'blockone-backup-[0-9]*$' | sort | tail -n 1) -c upload | grep -E '^(size|prune|keep|delete)'
+kubectl --context homelab -n blockone-crypto-tax logs job/$(kubectl --context homelab -n blockone-crypto-tax get jobs -o name | grep -o 'blockone-backup-mirror-[0-9]*$' | sort | tail -n 1) -c mirror | grep -E '^(size|prune)'
+```
+
+The R2 bucket's size is also under the bucket's Metrics tab in the Cloudflare dashboard.
+
 ## Releases: staging, promotion, rollback
 
 Since 2026-11-12 an app change reaches this deployment only through staging (`docs/blockone-crypto-tax-staging.md`) and the owner's approval. The scripts are in the app repo (`scripts/release/`, AI-assisted), the process in its `docs/release_process.md`. What they do here:
@@ -235,7 +256,7 @@ Since 2026-11-12 an app change reaches this deployment only through staging (`do
 
 **Change to the production restore Job (2026-11-12, needs the owner's review):** `restore.yaml`'s database step no longer uses `pg_restore --clean --if-exists --single-transaction`. That drops only what the dump has, so a backup from before a migration that added a table with a foreign key on `taxpayers` (0008's `wallet_kinds`) failed and rolled back, leaving the app stopped; a new table without a foreign key would have survived and broken the next migrate. It now writes the dump out as SQL first (an unreadable dump never reaches the database), then runs `DROP SCHEMA public CASCADE; CREATE SCHEMA public; ALTER SCHEMA public OWNER TO pg_database_owner; GRANT USAGE ON SCHEMA public TO PUBLIC;` (the schema as a new database has it) and the SQL with `psql --single-transaction -v ON_ERROR_STOP=1`. The `work` volume is writable in that step for the SQL file, which a trap removes however the step ends. The app repo's CI replays exactly these commands on PostgreSQL 18 (an N-1 dump over an N schema, and a failing restore that must change nothing). The Job is applied only when listed, so production's render is unchanged.
 
-The backup Jobs these create follow the CronJobs' settings and land in the same R2 folders, so the 35-day retention applies to them too. A pre-deploy backup fails (and stops the promotion) if a job writes case files while tar reads them: promote when nothing is running.
+The backup Jobs these create follow the CronJobs' settings and land in the same R2 folders, tagged as pre-release sets (see "Retention"): they are kept 7 days, not 35. A pre-deploy backup fails (and stops the promotion) if a job writes case files while tar reads them: promote when nothing is running.
 
 ### Restore drill
 
@@ -257,16 +278,16 @@ Tested on 2026-11-12 with a stand-in `kubectl` (not on the cluster): the generat
 
 | Question | Answer |
 |---|---|
-| Encrypted at rest? | Yes in R2 and on pisrv01: rclone crypt (XSalsa20-Poly1305, names and contents), checked in the drill above (2026-11-11). The plaintext dump and archive exist only in the backup pod's `emptyDir` on minisrv01 while the Job runs (disk-backed; see gaps). The live database and case files sit on minisrv01's local-path volumes: encrypted only if minisrv01's disk is (not checked here) |
+| Encrypted at rest? | Yes in R2 and on pisrv01: rclone crypt (XSalsa20-Poly1305, names and contents), checked in the drill above (2026-11-11). The plaintext dump and archive exist only in memory-backed `emptyDir`s while the Jobs run (minisrv01 for the backup, pisrv01 for the mirror's check), and the case file for a yearly run is held in a memory-backed volume too (R42 G7). The live database and case files sit on minisrv01's local-path volumes: encrypted only if minisrv01's disk is (not checked here) |
 | Off site? | R2 (Cloudflare), plus a second copy on pisrv01 (copy, never sync; `--immutable`) |
-| Retention | 35 days in both places (`rclone delete --min-age 35d`, only after a successful run). Pre-deploy and pre-rollback backups follow the same rule |
+| Retention | Nightly sets 35 days, pre-release sets 7 days, in both places, by `backup-prune.sh` after a successful nightly run (see "Retention") |
 | Who/what can read a backup | Anyone holding both crypt passwords (password manager; the SOPS Secrets). Anyone with the repo's age private key, which decrypts those Secrets (the workstation has it). Anyone who can read Secrets in `blockone-crypto-tax` (cluster admin: the `homelab` kubeconfig). Pods: the backup and mirror Jobs, the restore Job, and (temporarily) the drill pod. R2 tokens and the Cloudflare account, and root on pisrv01, give ciphertext only |
 | Who can delete a backup | The read-and-write R2 token (the nightly job), any Cloudflare account admin, root on pisrv01 for the mirror copy |
 
 Gaps found (none changed here; proposals for the owner):
 
 0. **Alert receiver: done (2026-11-12).** Alertmanager sends every `BlockOneBackup*` alert (and any other `severity=critical` alert) to the owner's Telegram bot; see `docs/monitoring.md`, "Alerting". Not covered: a failed pre-deploy backup (`bk-predeploy-*`/`bkv-*`) stops `promote.sh` in the terminal instead, and the job-name pattern doesn't match it.
-1. **Plaintext on disk during the backup.** `blockone-backup`'s `work` `emptyDir` is disk-backed, so the unencrypted dump and tar are written to minisrv01's disk while the Job runs, until kubelet cleans up the finished pod's volumes. Proposal: `medium: Memory` with a size limit (the 2026-11-12 pair is 77 MiB) and a matching memory limit on the containers.
+1. **Plaintext on disk during the backup: closed.** The `work` volume (backup), the `verify` and `tmp` volumes (mirror) and the worker's `.case-tmp` folder are `medium: Memory` with size limits, and the containers that write them have matching memory limits. Sizing: the 2026-11-19 pair is a 452 MB archive and a 125 KB dump; the volume is 1 Gi (about 2x), so the archive container's limit is 1536Mi (the pages of a memory-backed volume are charged to the container that wrote them). A set that outgrows 1 Gi fails the run loudly (`tar: No space left on device`); raise `sizeLimit` and the limit together.
 2. **Bucket lock not confirmed.** Owner step 3 above (an R2 bucket lock rule on `blockone/`, 30 days) is optional; without it, the read-and-write token alone can empty the bucket (the pisrv01 copy survives). Proposal: set it and record that it's on.
 3. **One key opens everything.** The age private key decrypts the crypt passwords and both R2 tokens. Proposal: keep the age key and the crypt passwords offline as well (password manager), and consider a second age recipient held offline so a lost workstation isn't a lost key.
 4. **Both off-site copies depend on one provider account for R2**, and the same account runs Access and the tunnels. Proposal (later, with more clients): a second off-site target outside Cloudflare.
