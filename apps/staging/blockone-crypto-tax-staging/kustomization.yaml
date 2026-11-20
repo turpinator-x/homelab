@@ -101,11 +101,13 @@ patches:
         path: /spec/template/spec/containers/0/resources
         value: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 256Mi}}
   # Modest sizes: a few testers and synthetic cases. The staging-only tax id key comes from its own Secret.
+  # The API memory limit must match production's (768Mi): the app refuses to start below 400+128 MiB
+  # (scripts/check-staging-memory-parity.sh fails the build otherwise).
   - target: {kind: Deployment, name: blockone-api}
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources
-        value: {requests: {cpu: 20m, memory: 128Mi}, limits: {memory: 512Mi}}
+        value: {requests: {cpu: 20m, memory: 128Mi}, limits: {memory: 768Mi}}
       - op: add
         path: /spec/template/spec/containers/0/envFrom/-
         value: {secretRef: {name: blockone-staging-keys}}

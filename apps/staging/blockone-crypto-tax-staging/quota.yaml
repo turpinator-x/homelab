@@ -1,5 +1,5 @@
 # A ceiling on what staging can take from minisrv01, so a runaway test can't starve production (same node).
-# Steady state is about 0.4 Gi requested and 2.2 Gi of limits; the headroom covers a rolling update (one extra API
+# Steady state is about 0.4 Gi requested and 2.5 Gi of limits; the headroom covers a rolling update (one extra API
 # and worker pod) plus a demo reset. Every container here sets memory requests and limits and CPU requests.
 apiVersion: v1
 kind: ResourceQuota
