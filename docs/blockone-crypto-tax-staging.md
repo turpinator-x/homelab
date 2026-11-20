@@ -66,7 +66,9 @@ until the owner switches over: `docs/blockone-crypto-tax.md`, "blockproof.tax ho
 
 ## Cost
 
-Requests: about 90m CPU and 0.5 Gi memory at rest (API 20m/128 Mi, worker 50m/192 Mi, PostgreSQL 20m/64 Mi, cloudflared 10m/32 Mi), plus a demo-reset pod for a few seconds per deploy. Limits: 512 Mi + 1 Gi + 256 Mi + 128 Mi. Disk: 2 Gi on minisrv01. One more tunnel and Access application (both within Cloudflare's free Zero Trust plan, which covers up to 50 users). No R2 storage.
+Requests: about 90m CPU and 0.5 Gi memory at rest (API 20m/128 Mi, worker 50m/192 Mi, PostgreSQL 20m/64 Mi, cloudflared 10m/32 Mi), plus a demo-reset pod for a few seconds per deploy. Limits: 768 Mi + 1 Gi + 256 Mi + 128 Mi. Disk: 2 Gi on minisrv01. One more tunnel and Access application (both within Cloudflare's free Zero Trust plan, which covers up to 50 users). No R2 storage.
+
+**Rule:** staging API memory limit must be >= production's; the app refuses to start below 400+128 MiB (400 MiB API reserve plus one 128 MiB upload check). `scripts/check-staging-memory-parity.sh`, run by `validate.sh`, fails otherwise; worker and PostgreSQL limits below production's are printed as warnings (the quota limits how far they can rise).
 
 ## How the automated tests get in
 
