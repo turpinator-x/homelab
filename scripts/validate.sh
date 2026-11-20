@@ -39,3 +39,6 @@ echo "== BlockOne key parity (production and staging carry the same explorer key
 
 echo "== BlockOne alert rules (promtool)"
 ./scripts/test-blockone-alerts.sh
+
+echo "== Backup retention (prune logic against synthetic listings)"
+./scripts/test-backup-prune.sh
