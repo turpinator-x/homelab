@@ -48,3 +48,9 @@ echo "== Backup retention (prune logic against synthetic listings)"
 
 echo "== Backup manifests (exit-17 wiring, memory volumes, upload script behaviour)"
 ./scripts/test-backup-manifest.sh
+
+echo "== Weekly storage report (script against synthetic trees: privacy, allow-list, growth, failure paths)"
+./scripts/test-storage-report.sh
+
+echo "== Weekly storage report manifest (read-only mount, non-root, no secrets, network policy, alerts)"
+./scripts/test-storage-report-manifest.sh

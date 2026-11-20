@@ -14,7 +14,7 @@ for cmd in promtool python3; do
   command -v "$cmd" > /dev/null || { echo "$cmd not found" >&2; exit 1; }
 done
 
-for rule in app-alerts backup-alerts storage-alerts; do
+for rule in app-alerts backup-alerts storage-alerts storage-report-alerts; do
   python3 -c 'import sys, yaml; yaml.safe_dump(yaml.safe_load(open(sys.argv[1]))["spec"], sys.stdout)' \
     "$dir/$rule.yaml" > "$tmp/$rule.rules.yaml"
   promtool check rules "$tmp/$rule.rules.yaml"

@@ -1,0 +1,158 @@
+# Weekly read-only storage report for the case-files volume (docs/blockone-crypto-tax.md, "Weekly storage report").
+#
+#   Sunday 03:00 blockone-storage-report (minisrv01): measures the data volume with du/find (script:
+#         storage-report.sh, mounted from a ConfigMap), prints a plain-text report to the Job log, and posts a short
+#         digest to the in-cluster Alertmanager as the synthetic alert BlockOneStorageReport, which the existing
+#         BlockOne.+ route sends to Telegram. Growth past the limits sends it as severity critical with a GROWTH prefix.
+#
+# Read-only by construction: the data volume is mounted read-only, the pod has no Kubernetes API token, no Secret, and
+# its only network paths are DNS and Alertmanager. The one thing it writes is its own small state volume (the previous
+# report's numbers, for the growth comparison). No folder, file, taxpayer name or ID reaches the log or the alert: the
+# script labels case folders by rank and a 6-character hash and names only app-created folders (see the script's header).
+#
+# Run it now: kubectl --context homelab -n blockone-crypto-tax create job --from=cronjob/blockone-storage-report \
+#   blockone-storage-report-manual-$(date +%Y%m%d%H%M)   (the name must start blockone-storage-report- so a failure alerts)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: blockone-storage-report-state
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled # keep the history if the report is turned off
+spec:
+  storageClassName: local-path-retain
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 16Mi # a few KB of numbers; local-path does not enforce the size
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: blockone-storage-report
+  labels:
+    app: blockone-storage-report
+spec:
+  schedule: "0 3 * * 0"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600 # a run missed by more than an hour (node down) waits for next Sunday
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # fail loudly once: BlockOneStorageReportJobFailed
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: blockone-storage-report # networkpolicy below: DNS and Alertmanager only
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false # no Kubernetes API access at all
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: minisrv01 # blockone-data is a node-local volume (shared read-only, like the backup)
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001 # the app's uid, so it can read every case folder
+            runAsGroup: 10001
+            fsGroup: 10001 # makes the state volume writable
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: report
+              image: curlimages/curl:8.17.0@sha256:935d9100e9ba842cdb060de42472c7ca90cfe9a7c96e4dacb55e79e560b3ff40
+              command: ["/bin/sh", "/scripts/storage-report.sh"]
+              env:
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: JOB_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['job-name']
+                - name: PVC_NOMINAL_KIB
+                  value: "5242880" # blockone-data's nominal 5Gi (storage.yaml)
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: state
+                  mountPath: /state
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: blockone-data
+                readOnly: true
+            - name: state
+              persistentVolumeClaim:
+                claimName: blockone-storage-report-state
+            - name: scripts
+              configMap:
+                name: blockone-storage-report-script # generated from storage-report.sh (kustomization.yaml)
+                defaultMode: 0444
+            - name: tmp
+              emptyDir:
+                sizeLimit: 32Mi
+---
+# The weekly report: DNS, and Alertmanager's port (monitoring namespace). Nothing else, no internet. Alertmanager's
+# side needs no rule: the monitoring namespace has no NetworkPolicy (checked 2026-11-20), so its ingress is open.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blockone-storage-report
+spec:
+  podSelector:
+    matchLabels:
+      app: blockone-storage-report
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Alertmanager (kube-prometheus-stack): the pod's own port, since policies match pod addresses after the
+    # Service's translation. Service: kube-prometheus-stack-alertmanager:9093
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alertmanager
+      ports:
+        - port: 9093
+          protocol: TCP

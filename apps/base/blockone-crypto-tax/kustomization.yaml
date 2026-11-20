@@ -10,6 +10,8 @@ resources:
   - backup.yaml
   - backup-alerts.yaml
   - storage-alerts.yaml
+  - storage-report.yaml
+  - storage-report-alerts.yaml
   - servicemonitor.yaml
   - app-alerts.yaml
 configMapGenerator:
@@ -18,6 +20,10 @@ configMapGenerator:
     files:
       - backup-prune.sh
       - backup-size-report.sh
+  # The weekly storage report's script (tested by scripts/test-storage-report.sh)
+  - name: blockone-storage-report-script
+    files:
+      - storage-report.sh
   # Settings that aren't secret (src/nftcb/web/settings.py in the app repo). Secrets come from the staging overlay.
   - name: blockone-settings
     literals:

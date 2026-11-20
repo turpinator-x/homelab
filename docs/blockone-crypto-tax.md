@@ -38,6 +38,7 @@ flowchart LR
 | Secrets | overlay `*-secret.yaml.example` | templates only; real ones are SOPS-encrypted (checklist step 4) |
 | Flux | `clusters/staging/blockone-crypto-tax.yaml` | its own Kustomization, not part of `apps` |
 | Backups | `backup.yaml`, `backup-alerts.yaml`, overlay `restore.yaml` | nightly, encrypted, to R2 and pisrv01; see "Backups and restore" |
+| Storage report | `storage-report.yaml`, `storage-report.sh`, `storage-report-alerts.yaml` | weekly read-only report of where the space is and what grew, digest to Telegram; see "Weekly storage report" |
 
 - **One image, three commands.** The app repo's `Dockerfile` builds one image (`python:3.12.16-slim-trixie` pinned by digest, uid 10001, no secrets inside) whose entrypoint runs `api`, `worker` or `migrate`. Its `image` workflow builds linux/amd64 and linux/arm64 on pushes to `main` and `v*.*.*` tags and pushes `ghcr.io/turpinator-x/blockone-crypto-tax:sha-<commit>` (plus the version on tags). Actions are pinned by commit SHA; the job has `contents: read` and `packages: write` only.
 - **All pods on minisrv01.** `local-path` volumes live on one node, and the API and worker share the case-files volume, so they and PostgreSQL are pinned to minisrv01 with a `nodeSelector` (as Audiobookshelf is). The image is still multi-arch, so moving them later is a manifest change.
@@ -249,6 +250,66 @@ kubectl --context homelab -n blockone-crypto-tax logs job/$(kubectl --context ho
 **Why the work volume is 3Gi.** The case-files archive was 76 MiB through 2026-11-15 and 430 MiB on 11-19. It grew in four discrete steps of about 88 MiB (11-16, 11-17, 11-18, 11-19; roughly 1,500 to 2,000 files each), not per promotion and not from pre-release copies: **cause unknown**. Owner check from the API pod: `du -sk /data/cases/*` (likely a new case-sized folder per event). The archive is `tar` of the whole case-files volume (only `.pre-restore-*` and `.restoring-*` are skipped); the 7-day prune trims backups, not the archive's source. 3Gi and the mirror's 2Gi are caps, not predictions: watch the `work:` lines and find the cause rather than raising limits.
 
 The R2 bucket's size is also under the bucket's Metrics tab in the Cloudflare dashboard.
+
+### Weekly storage report
+
+AI-assisted (Claude Code wrote it; I set the requirements and review it). `storage-report.yaml` is a CronJob, **`blockone-storage-report`, Sundays 03:00 America/Los_Angeles** (before the 03:30 backup), that measures the case-files volume and tells me where the space is and what grew. It exists because the nightly case-files archive grew from 76 MiB to 430 MiB in four steps of about 88 MiB (11-16 to 11-19) with the cause unknown: the report makes that growth visible and says which folder it is in.
+
+**What it prints** (plain text in the Job log, headings and aligned columns, no colour or symbols):
+
+1. Summary: `/data` in use, against the volume's nominal 5Gi (local-path does not enforce it) and the node filesystem's fill, change since the last report, and whether a growth limit was crossed.
+2. Size and file count of each top-level folder of `/data`, and of `/data/cases` (the app's own folders by name).
+3. The 10 largest taxpayer folders. The app stores a workspace at `cases/<account id>/<taxpayer id>/` (a flat `cases/<id>/` works too), so each is shown as **rank, the first 6 hex characters of the SHA-256 of the account folder's name, and the same for the taxpayer folder's name**, with size, files and change since last time. Ranking is across all accounts.
+4. Inside the largest taxpayer folder, down to 7 levels (`data/work/cache/alchemy/<network>` is 5): size, files, newest file's date and change, for **app-created folder names only** (an allow-list of what the app's code and docs create: `data`, `raw`, `work`, `cache`, `reports`, `proof_A`, `proof_B`, `locked`, `seed_adjustments`, `direct`, `config`, `decisions`, `packages`, `tmp`, the provider cache folders, the per-year report folders, and so on: the list is `label_of()` in `storage-report.sh`). Any other name is counted in an `<other>` bucket for its level. A name that merely starts with an allow-listed word (`data-...`) is `<other>`; a year folder prints only under `reports`, `locked`, `packages` and similar parents.
+5. The 10 most recently changed app folders, and 6. the largest growers since the last report.
+7. The last 8 reports' totals (from the state volume), and 8. a pointer for the backup archive size (below).
+
+**Unreadable folders.** One folder `du`/`find` cannot read (exit 1 with partial output) does not fail the run: the log says `UNREADABLE: N measurement(s)...` with reasons from a fixed list and no names, and the sizes there are lower bounds. A timeout, exit 2, or no output at all still fails the Job.
+
+**Privacy.** No case folder name, file name, taxpayer name or ID is printed, logged, sent or stored: case folders are hashed, file names are only counted, names outside the allow-list become `<other>`, the stderr of `du`/`find` (which contains paths) is withheld and summarised from a fixed list of reasons, and the digest passes a character whitelist. `scripts/test-storage-report.sh` proves it against folders named with spaces, newlines, leading dashes and shell metacharacters.
+
+**Read-only and gentle.** The data PVC is mounted read-only (same-node RWO sharing, like the backup). The pod has no ServiceAccount token, no Secret, a NetworkPolicy allowing only DNS and Alertmanager's port, runs as uid 10001 non-root with a read-only root filesystem, 128Mi memory limit, `backoffLimit: 0`, `activeDeadlineSeconds: 300`, `successfulJobsHistoryLimit: 3`. `du`/`find` run at `nice 19` and idle I/O class, never follow symlinks, never leave the volume (`-x`), each under a 120 s timeout (one retry for a file removed mid-scan). The image is the pinned `curlimages/curl` already used for the llm pods (it has busybox `du`, `find`, `nice`, `timeout`, `sha256sum` and `curl`).
+
+**The digest** goes to Telegram through the existing route: the job posts a synthetic alert `BlockOneStorageReport` to Alertmanager (`kube-prometheus-stack-alertmanager.monitoring.svc:9093/api/v2/alerts`), which the `BlockOne.+` route (warning and critical) sends to Telegram. `summary` and `description` carry the digest (totals, change, the three biggest growers, a log command). The alert is active for 15 minutes, so Telegram also shows a "resolved" message afterwards (the receiver has resolved notices on): expected, not a second problem. Alertmanager's side needs no NetworkPolicy change: the `monitoring` namespace has none (checked 2026-11-20), so the egress rule in `storage-report.yaml` is the only opening.
+
+**Growth alert.** Compared with the previous report: if `/data` grew more than **20 percent or 500 MiB**, or **any single folder** (an app folder at any level, an `<other>` bucket, a case folder, a top-level folder) grew more than **250 MiB**, the digest is sent as **severity critical with a `GROWTH:` prefix** and names the reasons. Otherwise it is a warning (the weekly digest). A folder's parents grow with it, so one 300 MiB folder also trips `data` and `data/work`. The first report is a baseline (no comparison). **The first comparison is a week after the baseline** unless you run it manually twice. Each finding names only the deepest folder that grew (one 30 MiB file is one line, not one per ancestor). **Expect a critical `GROWTH:` digest every week until the Alchemy BSC cache growth (about 1,500 files and 650 MB a day) is fixed:** that is a separate investigation, and the report is how you see it is the cause. Do not raise the limits to silence it. The largest case folder's own sub-folders are compared only when it is the same case folder as last time.
+
+**Where the previous numbers live.** On a 16Mi `blockone-storage-report-state` PVC that only this job mounts (read-write), not in a ConfigMap. A ConfigMap the job patches would need a ServiceAccount token in the pod that reads private data, a Role and RoleBinding, and an egress rule to the Kubernetes API server (its address is inside the private range every other policy here excludes), and Flux would own an object the job also writes. The volume needs none of that. It holds `last.tsv` (hashes, allow-listed names and sizes only) and a 60-line `history.tsv`. State is saved only after Alertmanager accepted the digest, so a failed delivery never hides a week's growth.
+
+**Limits you should know.** Alertmanager is unauthenticated: the egress rule to port 9093 lets this pod reach its silences API as well as the alerts API (the job only posts alerts; a compromised job image could do more). App-created names, such as an exchange folder `kraken` under `data/raw`, can appear in Telegram, tied to a hash only. A new, empty taxpayer folder without `data`, `reports` or `config` is not recognised as a workspace in the flat layout.
+
+**Tools and the decisive check.** The script needs `du find df stat awk sort sed cut tr wc sha256sum date mktemp grep head tail cat sleep mv rm cp tee` (it fails loudly if one is missing) and uses `nice`, `ionice` and `timeout` when present; if one is missing the log header lists the tools found and missing and prints a `WARNING` line, and it runs without that wrapper (the Job's 300 s deadline still applies). The workstation tests could not exercise the image's busybox, so the decisive check is the image itself. The llm pods use the same `curlimages/curl` image, but there it runs only as an init container (`fetch-model`), which has exited, so `kubectl exec` into it does not work. The first manual run is the check instead: it prints `Tools found:` and `Tools missing:` as the first lines of the log and stops before measuring anything if a required tool is missing, so a bad image costs one failed read-only Job. If you want the check without a Job, run this in any running pod of that image (the line is the one to use):
+
+```
+for c in du find df stat awk sort sed cut tr wc sha256sum date mktemp timeout nice ionice tee; do command -v $c >/dev/null || echo MISSING $c; done; echo checked
+```
+
+**If it fails** (`du` fails or times out, the data volume or state volume is missing, Alertmanager is unreachable or refuses): the Job fails with a one-line reason on stderr, and `BlockOneStorageReportJobFailed` (warning, `storage-report-alerts.yaml`) fires; `BlockOneStorageReportStale` fires after 8 days without a success. Name a manual run `blockone-storage-report-...` (below) so a failure alerts.
+
+**Run it now and read it** (creating the Job is the only cluster write; it also sends the Telegram digest):
+
+```
+job=blockone-storage-report-manual-$(date +%Y%m%d%H%M)
+kubectl --context homelab -n blockone-crypto-tax create job --from=cronjob/blockone-storage-report "$job"
+kubectl --context homelab -n blockone-crypto-tax wait --for=condition=complete --timeout=300s "job/$job"
+kubectl --context homelab -n blockone-crypto-tax logs "job/$job"
+```
+
+If `wait` times out or the Job failed, the same `logs` command shows why. Read the last scheduled report:
+
+```
+kubectl --context homelab -n blockone-crypto-tax logs job/$(kubectl --context homelab -n blockone-crypto-tax get jobs -o name | grep -o 'blockone-storage-report-[0-9]*$' | sort | tail -n 1)
+```
+
+**The backup archive's size** is not in the report: the archive is built in the backup job's own scratch volume and uploaded to R2, and reading either needs R2 keys or Kubernetes API access, neither of which this job has. Read it from the backup job's log (the `archive` step lists the file, the upload step logs the `size:` line):
+
+```
+kubectl --context homelab -n blockone-crypto-tax logs job/$(kubectl --context homelab -n blockone-crypto-tax get jobs -o name | grep -o 'blockone-backup-[0-9]*$' | sort | tail -n 1) --all-containers | grep -E 'tar\.gz|^size'
+```
+
+Compare it with section 1: the archive is the compressed volume, so a step in one should show in the other. Staging gets none of this (its overlay deletes the CronJob, volume, policy, rule and script).
+
+**What the tests prove** (`scripts/test-storage-report.sh`, `scripts/test-storage-report-manifest.sh`, both in `validate.sh`): no raw name leaks (hostile names), allow-list behaviour, hash labels equal `sha256sum`, symlinks and loops are not followed, 30,000 files counted exactly, each growth limit (and the quiet cases), the alert's JSON shape and that the `BlockOne.+` route matches it, and the failure paths (Alertmanager refusing leaves the state untouched; an unreadable folder, a hanging `du`, a missing volume, a missing tool, an unwritable state volume and a damaged state file). The script also runs under busybox `ash` with busybox `du`, `df`, `stat`, `awk`, `sed`, `sort` and `sha256sum` and gives the same results as GNU. **Not testable before it runs in the cluster:** busybox `find`, `nice`, `timeout` and `date` of the curl image (the workstation's busybox has none of them, so the tests use GNU for those four; the script uses only options both have), `ionice` in the container, Alertmanager's real response, the NetworkPolicy allowing the pod to reach it, and the first-run behaviour on the 3.75 GiB case folder. The first manual run after the merge is that check.
 
 ### Worker `.case-tmp` (memory-backed) after the change
 
