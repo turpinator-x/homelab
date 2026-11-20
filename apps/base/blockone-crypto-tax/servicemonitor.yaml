@@ -1,0 +1,19 @@
+# Prometheus scrapes the API's aggregate ops metrics (src/nftcb/web/prom.py in the app repo: HTTP counts by route
+# template and status class, job counts, provider health, retries, blockone_health_alert). No user, case or wallet
+# is in them. The label is what this Prometheus's serviceMonitorSelector matches. The worker serves no /metrics:
+# the retry and health gauges are read from the database by the API's endpoint.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: blockone-api
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: blockone-api
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

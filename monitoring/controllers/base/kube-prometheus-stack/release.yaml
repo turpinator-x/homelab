@@ -47,6 +47,12 @@ spec:
               matchers:
                 - alertname =~ "BlockOneBackup.*"
               repeat_interval: 24h
+            # BlockOne app alerts (apps/base/blockone-crypto-tax/app-alerts.yaml): warning and critical; info stays in the UI
+            - receiver: telegram
+              matchers:
+                - alertname =~ "BlockOne.+"
+                - severity =~ "warning|critical"
+              repeat_interval: 24h
             # Any other critical alert; warnings stay in the Alertmanager UI only
             - receiver: telegram
               matchers:

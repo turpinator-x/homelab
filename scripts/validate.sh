@@ -36,3 +36,6 @@ fi
 
 echo "== BlockOne key parity (production and staging carry the same explorer key names)"
 ./scripts/check-blockone-key-parity.sh
+
+echo "== BlockOne alert rules (promtool)"
+./scripts/test-blockone-alerts.sh

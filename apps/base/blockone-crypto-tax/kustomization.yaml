@@ -9,6 +9,8 @@ resources:
   - networkpolicy.yaml
   - backup.yaml
   - backup-alerts.yaml
+  - servicemonitor.yaml
+  - app-alerts.yaml
 configMapGenerator:
   # Settings that aren't secret (src/nftcb/web/settings.py in the app repo). Secrets come from the staging overlay.
   - name: blockone-settings
@@ -20,5 +22,9 @@ configMapGenerator:
       - BLOCKONE_WEB_ADMIN_EMAILS=jarrodturpin@blockoneglobal.com
       - NFTCB_DATA_DIR=/data/engine
       - HOME=/tmp
+      # Prometheus /metrics (aggregate ops metrics, no user data) on its own pod-internal port. Never behind the tunnel:
+      # cloudflare.yaml points at the http port (8000) only. Scraped by servicemonitor.yaml; networkpolicy.yaml
+      # admits the monitoring namespace to this port and nothing else
+      - BLOCKONE_WEB_METRICS_PORT=9464
       # The API trusts X-Forwarded-* only from the pod network (k3s's default pod range), where cloudflared runs
       - FORWARDED_ALLOW_IPS=10.42.0.0/16

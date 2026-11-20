@@ -1,0 +1,146 @@
+# Alerts for the running app (production only: the expressions name namespace blockone-crypto-tax, and the staging
+# overlay deletes this rule). Two sources: kube-state-metrics and cAdvisor for the pods, and the API's own /metrics
+# (servicemonitor.yaml). The label is what this Prometheus's ruleSelector matches.
+#
+# Notifications (monitoring/controllers/base/kube-prometheus-stack/release.yaml): every alert whose name starts with
+# BlockOne and whose severity is warning or critical goes to Telegram, grouped by alertname, repeated every 24 h.
+# `info` stays in the Alertmanager UI. With three testers, `for:` is long on purpose so that a blip or one bad
+# request does not page.
+#
+# Tests: tests/app-alerts.test.yaml, run by scripts/test-blockone-alerts.sh (promtool test rules).
+# Backup alerts are in backup-alerts.yaml (BlockOneBackupStale, NeverSucceeded, JobFailed).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blockone-app
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blockone-app-pods
+      rules:
+        - alert: BlockOneMetricsDown
+          # Prometheus cannot read the API's /metrics: the API is down, or the scrape or its NetworkPolicy broke
+          expr: absent(up{namespace="blockone-crypto-tax", job="blockone-api"} == 1)
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Prometheus has not scraped the BlockOne API for 10 minutes
+            description: "kubectl --context homelab -n blockone-crypto-tax get pods; then check the Prometheus Targets page for blockone-api"
+        - alert: BlockOnePodNotReady
+          # api, worker and postgres only: backup pods are Jobs, and finished ones are never "ready"
+          expr: |
+            kube_pod_status_ready{namespace="blockone-crypto-tax", condition="true", pod=~"blockone-(api|worker)-.+|blockone-postgres-[0-9]+"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.pod }} has not been ready for 10 minutes"
+            description: "kubectl --context homelab -n blockone-crypto-tax describe pod {{ $labels.pod }}"
+        - alert: BlockOnePodCrashLooping
+          expr: |
+            kube_pod_container_status_waiting_reason{namespace="blockone-crypto-tax", reason="CrashLoopBackOff", pod=~"blockone-(api|worker)-.+|blockone-postgres-[0-9]+"} == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.pod }} ({{ $labels.container }}) has been in CrashLoopBackOff for 5 minutes"
+            description: "kubectl --context homelab -n blockone-crypto-tax logs {{ $labels.pod }} -c {{ $labels.container }} --previous"
+        - alert: BlockOnePodRestarting
+          # Catches restarts that recover between samples, which the CrashLoopBackOff state above misses
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax", container=~"api|worker|postgres"}[1h]) >= 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }} ({{ $labels.container }}) restarted 3 or more times in an hour"
+            description: "kubectl --context homelab -n blockone-crypto-tax logs {{ $labels.pod }} -c {{ $labels.container }} --previous"
+        - alert: BlockOneContainerOOMKilled
+          # last_terminated_reason sticks until the next termination, so it only counts with a restart in the last
+          # 15 minutes. The memory limit is in api.yaml, worker.yaml and postgres.yaml
+          expr: |
+            kube_pod_container_status_last_terminated_reason{namespace="blockone-crypto-tax", reason="OOMKilled"} == 1
+            and on (namespace, pod, container)
+            increase(kube_pod_container_status_restarts_total{namespace="blockone-crypto-tax"}[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }} ({{ $labels.container }}) was killed for running out of memory"
+            description: "The container hit its memory limit. Raise the limit in Git only after checking what grew (kubectl top pod, the job that ran)"
+        - alert: BlockOneMemoryNearLimit
+          # Working set (what the kernel counts for the limit) against the container's memory limit
+          expr: |
+            max by (namespace, pod, container) (container_memory_working_set_bytes{namespace="blockone-crypto-tax", container=~"api|worker|postgres"})
+            /
+            max by (namespace, pod, container) (kube_pod_container_resource_limits{namespace="blockone-crypto-tax", resource="memory", container=~"api|worker|postgres"})
+            > 0.9
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }} ({{ $labels.container }}) is above 90% of its memory limit"
+        - alert: BlockOneCPUHigh
+          # The containers have CPU requests but no CPU limits, so there is no limit to be near. A full core for half
+          # an hour is far beyond the idle load; a long engine run can cause it, so it never notifies (severity info)
+          expr: |
+            sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace="blockone-crypto-tax", container=~"api|worker|postgres"}[5m])) > 1
+          for: 30m
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.pod }} ({{ $labels.container }}) has used more than one CPU core for 30 minutes"
+    - name: blockone-app-service
+      rules:
+        - alert: BlockOneAPIErrors
+          # Server errors counted over 15 minutes; route templates and status classes only, never a user
+          expr: sum(increase(blockone_http_requests_total{namespace="blockone-crypto-tax", status="5xx"}[15m])) > 5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The API returned more than 5 server errors (5xx) in 15 minutes
+            description: "kubectl --context homelab -n blockone-crypto-tax logs deploy/blockone-api --since=30m"
+        - alert: BlockOneAPIErrorRateHigh
+          # Share of requests failing, with a floor on volume so one request at night cannot be a 100% rate
+          expr: |
+            sum(increase(blockone_http_requests_total{namespace="blockone-crypto-tax", status="5xx"}[10m]))
+            / sum(increase(blockone_http_requests_total{namespace="blockone-crypto-tax"}[10m])) > 0.05
+            and sum(increase(blockone_http_requests_total{namespace="blockone-crypto-tax"}[10m])) >= 20
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: More than 5% of API requests have failed with 5xx for 10 minutes
+            description: "kubectl --context homelab -n blockone-crypto-tax logs deploy/blockone-api --since=30m"
+        - alert: BlockOneJobsGaveUp
+          # blockone_job_retries_gave_up_24h: builds that used up their automatic retries in the last 24 hours. The
+          # owner's attention is needed because nothing will run them again by itself
+          expr: max(blockone_job_retries_gave_up_24h{namespace="blockone-crypto-tax"}) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} job(s) used up their automatic retries in the last 24 hours"
+            description: "Admin -> Health in the app lists them. Retries are in docs/status.md (BLOCKONE_WEB_RETRY_MAX)"
+        - alert: BlockOneJobRetriesPending
+          # Retries wait up to 6 hours between attempts, so a short wait is normal. Pending for a full hour means a
+          # provider outage or a bug is holding work back
+          expr: max(blockone_job_retries_pending{namespace="blockone-crypto-tax"}) > 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} job retry(ies) have been waiting for over an hour"
+            description: "Admin -> Health shows the provider that is failing"
+        - alert: BlockOneHealthAlert
+          # blockone_health_alert is already 1 only after something stayed broken past BLOCKONE_WEB_HEALTH_ALERT_MINUTES
+          # (360), so a short for: is enough
+          expr: max(blockone_health_alert{namespace="blockone-crypto-tax"}) == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The app's own health check has stayed red past its alert threshold
+            description: "Open Admin -> Health in the app for the failing provider or job"
