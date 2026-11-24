@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main a1a9c65: Merge pull request #155 from turpinator-x/feat/unaccounted-register
+  # Built from the app repo's main 5eee986: Merge pull request #174 from turpinator-x/fix/non-alchemy-reader-budget
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-a1a9c656d99f99ffe5c827d2e6e0a5aea89d2a17
-    digest: sha256:35541b823816a906c52dabb56ce3c3795986c87ba6d78b61f439c93c089bcbc0
+    newTag: sha-5eee9867416603d41d3a599208eb52f03beb62b5
+    digest: sha256:bd9f09e37eb860ac81af67289ba65e22b3c8e23c8fda58c9d70d93ba704c10d6
