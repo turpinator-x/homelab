@@ -175,7 +175,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main a1a9c65: feat(register): unaccounted-items register (options menu PR 2)
+  # Built from the app repo's main 5eee986: fix(chain-build): stop every reader at the wallet budget; resumed full reads reu
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-a1a9c656d99f99ffe5c827d2e6e0a5aea89d2a17
-    digest: sha256:35541b823816a906c52dabb56ce3c3795986c87ba6d78b61f439c93c089bcbc0
+    newTag: sha-5eee9867416603d41d3a599208eb52f03beb62b5
+    digest: sha256:bd9f09e37eb860ac81af67289ba65e22b3c8e23c8fda58c9d70d93ba704c10d6
