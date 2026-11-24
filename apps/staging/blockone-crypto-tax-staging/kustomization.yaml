@@ -175,7 +175,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main e7f975d: fix(chain): honour the run deadline in pricing, booking and the check stages
+  # Built from the app repo's main 0a5f38b: fix(chain): bound XRPL history memory; fail a restarted pod's lost job at once
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-e7f975d5a07d0d3ec66df56a0f1316516d9f1378
-    digest: sha256:e24a204b140ea0e683d29c26f4367652b3691eafb0ec3226898edab9470ca0ac
+    newTag: sha-0a5f38b70e2724849abc20979aea3e5685cd9c48
+    digest: sha256:463d13592180cde606debe1e14de167eb312e409d391af79e9645c5675ab85ac
