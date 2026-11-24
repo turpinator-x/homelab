@@ -26,7 +26,7 @@ metadata:
 spec:
   limits:
     - type: Container
-      default: { cpu: "2", memory: 3Gi }
+      default: { cpu: "2", memory: 2560Mi }
       defaultRequest: { cpu: 250m, memory: 512Mi }
 ---
 apiVersion: v1
@@ -35,7 +35,7 @@ metadata:
   name: runner-cap
   namespace: arc-runners-crypto-tax
 spec:
-  hard: { requests.cpu: "3", requests.memory: 6Gi, limits.cpu: "6", limits.memory: 8Gi, pods: "3" }
+  hard: { requests.cpu: "3", requests.memory: 6Gi, limits.cpu: "6.5", limits.memory: 5632Mi, pods: "4" }
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -46,17 +46,55 @@ spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
 ---
-# Runner pods may resolve names and reach the public internet on 80/443 (GitHub, PyPI, apt mirrors). Never the pod
-# or Service networks (so not the Kubernetes API, PostgreSQL or any namespace) and never the home LAN or the nodes.
-# IP-based only: it can't name hosts (docs/blockone-crypto-tax.md explains why).
+# Egress allowlist. The cluster CNI is k3s's default (flannel + kube-router NetworkPolicy): IP and port rules only, no
+# host names. So runner pods may talk only to DNS and to the egress proxy below (squid, allowing a short list of
+# hosts); only the proxy may reach the public internet. Runner pods get no route to the pod or Service networks,
+# the node, the home LAN or each other.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: runner-egress
   namespace: arc-runners-crypto-tax
 spec:
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [egress-proxy] }
   policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: egress-proxy
+      ports:
+        - { port: 3128, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  podSelector:
+    matchLabels:
+      app: egress-proxy
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [egress-proxy] }
+      ports:
+        - { port: 3128, protocol: TCP }
   egress:
     - to:
         - namespaceSelector:
@@ -75,6 +113,75 @@ spec:
       ports:
         - { port: 443, protocol: TCP }
         - { port: 80, protocol: TCP }
+---
+# The allowlist. Tightening later = edit this list. Gap: squid sees the CONNECT host name, not the content, so a
+# name on the list could still be used to move data (for example a GitHub repo or gist the job can write to).
+# Cache and artifact storage is Azure blob; only GitHub's results account names are allowed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egress-proxy-conf
+  namespace: arc-runners-crypto-tax
+data:
+  squid.conf: |
+    http_port 3128
+    acl allowed_hosts dstdomain .github.com .githubusercontent.com .githubapp.com
+    acl allowed_hosts dstdomain pypi.org files.pythonhosted.org
+    acl allowed_hosts dstdomain archive.ubuntu.com security.ubuntu.com
+    acl results_blob dstdom_regex -i ^productionresultssa[0-9]+\.blob\.core\.windows\.net$
+    acl ports port 80 443
+    http_access deny !ports
+    http_access allow allowed_hosts
+    http_access allow results_blob
+    http_access deny all
+    cache deny all
+    access_log stdout
+    cache_log /dev/null
+    pid_filename /tmp/squid.pid
+    coredump_dir /tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: egress-proxy }
+  template:
+    metadata:
+      labels: { app: egress-proxy }
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: minisrv01
+      priorityClassName: ci-runner
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: squid
+          image: ubuntu/squid:6.6-24.04_edge
+          args: ["-f", "/etc/squid-conf/squid.conf", "-NYC"]
+          ports:
+            - { name: proxy, containerPort: 3128 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: conf, mountPath: /etc/squid-conf, readOnly: true }
+      volumes:
+        - name: conf
+          configMap: { name: egress-proxy-conf }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  selector: { app: egress-proxy }
+  ports:
+    - { name: proxy, port: 3128, targetPort: proxy }
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
@@ -118,6 +225,13 @@ spec:
           - name: runner
             image: ghcr.io/actions/actions-runner:2.338.2
             command: ["/home/runner/run.sh"]
+            env:
+              - { name: http_proxy, value: "http://egress-proxy:3128" }
+              - { name: https_proxy, value: "http://egress-proxy:3128" }
+              - { name: HTTP_PROXY, value: "http://egress-proxy:3128" }
+              - { name: HTTPS_PROXY, value: "http://egress-proxy:3128" }
+              - { name: no_proxy, value: "localhost,127.0.0.1" }
+              - { name: NO_PROXY, value: "localhost,127.0.0.1" }
             resources:
               requests: { cpu: "1", memory: 1536Mi }
-              limits: { cpu: "3", memory: 4Gi }
+              limits: { cpu: "3", memory: 2560Mi }
