@@ -10,3 +10,8 @@ data:
   RENOVATE_GIT_AUTHOR: "turpinator-x-renovate[bot] <345903810+turpinator-x-renovate[bot]@users.noreply.github.com>"
   GITHUB_APP_CLIENT_ID: "Iv23liLKQyTHHuroN3l3"
   GITHUB_APP_INSTALLATION_ID: "173807387"
+  # Global defaults for every repo: one grouped PR a week for minor/patch/digest updates, so CI runs once per repo
+  # instead of once per dependency. Majors stay separate; vulnerability fixes skip the group and the schedule.
+  # A repo's own renovate.json still decides schedule, minimumReleaseAge and automerge.
+  RENOVATE_CONFIG: >-
+    {"packageRules":[{"description":"Group non-major updates into one weekly PR","matchUpdateTypes":["minor","patch","digest","pin","pinDigest"],"groupName":"non-major updates"}],"vulnerabilityAlerts":{"groupName":null,"schedule":["at any time"]}}
