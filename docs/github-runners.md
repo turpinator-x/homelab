@@ -62,3 +62,16 @@ The dind scale sets therefore write the pod template out in full instead of usin
 ## Docker-in-Docker and file permissions (umask)
 
 The same first test run also failed the curriculum's permissions lesson: new files came out as `-rw-rw-rw-`. Since Docker 29.6.0, commands started with `docker exec` inside Docker-in-Docker get a umask of 0000 instead of 0022. Plain `docker run` and Docker on a normal host are not affected. Tested 2026-11-10: 28.5.2, 29.4.0 and 29.5.2 give 0022; 29.6.0 to 29.9.2 give 0000. The dind sidecar is held at 29.5.2 (a Renovate rule keeps it below 29.6). To re-test a newer release: start `docker:<version>-dind` privileged, run a container inside it, and check that `docker exec <container> sh -c umask` prints 0022.
+
+## blockone-crypto-tax (draft design, 2026-11-24)
+
+The test shards of the private `blockone-crypto-tax` repo move to `homelab-blockone-crypto-tax`. PR code runs there and the app's production database is on the same node, so this scale set is stricter than the others (`infrastructure/arc/base/crypto-tax.yaml`):
+
+- Own namespace `arc-runners-crypto-tax`, **no Docker, no privileged pod** (Pod Security baseline). The `migrations-postgres` job needs Docker (service container, `docker exec`), so it stays on GitHub's runners.
+- Ephemeral, one job per pod, `maxRunners: 2`. The runner pod mounts no service account token.
+- Default-deny NetworkPolicy; egress only to DNS and public IPs on 80/443 (private ranges, Service/pod networks and the node LAN excluded). Not host-name based: an allowlist of github, pypi and apt mirrors needs an egress proxy or an FQDN-aware CNI (future tightening).
+- PriorityClass `ci-runner` (-200, never preempts), quota 3 CPU / 6 Gi requested, 6 CPU / 8 Gi limits, 3 pods.
+- Pinned to minisrv01 (amd64); the Pi is arm64 and the backup mirror.
+- Secrets: the runner pod gets only the job's `GITHUB_TOKEN`. The `arc-github-app` Secret sits in the namespace for the listener, not in the pod.
+
+Owner steps before merge: add `blockone-crypto-tax` to the `homelab-actions-runners` GitHub App's repositories; add the SOPS Secret `arc-github-app` for this namespace. Tightening later (production releases) is config: a dedicated tainted node (`nodeSelector` plus `tolerations`), gVisor/Kata `runtimeClassName`, an egress proxy.

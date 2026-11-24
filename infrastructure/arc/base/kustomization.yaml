@@ -5,3 +5,4 @@ resources:
   - limits.yaml
   - controller.yaml
   - runners.yaml
+  - crypto-tax.yaml
