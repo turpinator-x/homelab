@@ -175,7 +175,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main 0a5f38b: fix(chain): bound XRPL history memory; fail a restarted pod's lost job at once
+  # Built from the app repo's main 294e070: feat(importers): Bitfinex trades file importer
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-0a5f38b70e2724849abc20979aea3e5685cd9c48
-    digest: sha256:463d13592180cde606debe1e14de167eb312e409d391af79e9645c5675ab85ac
+    newTag: sha-294e070950540110f7a5dfccc6134cecec9fb6e8
+    digest: sha256:d5c6859dd772b3ea49a1d3aaa00cc303f0692d24f1564fdc588d9aff95a673ee
