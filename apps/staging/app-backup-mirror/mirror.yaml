@@ -54,7 +54,7 @@ spec:
                     name: app-backup-mirror # restic password, source repository, read-only R2 keys
               env:
                 - { name: RESTIC_REPOSITORY, value: /mirror/repo }
-                - { name: APPS, value: "linkding audiobookshelf" }
+                - { name: APPS, value: "linkding audiobookshelf forgejo" }
                 - { name: RESTORE_DIR, value: /restored }
                 - { name: TMPDIR, value: /tmp }
                 - { name: HOME, value: /tmp }
@@ -85,6 +85,13 @@ spec:
               volumeMounts: &checkmounts
                 - { name: restored, mountPath: /restored, readOnly: true }
                 - { name: code, mountPath: /code, readOnly: true }
+            - name: verify-forgejo
+              image: *python
+              command: ["python", "/code/verify.py", "/code/forgejo.json", "/restored/forgejo"]
+              env: *pyenv
+              resources: *small
+              securityContext: *locked
+              volumeMounts: *checkmounts
           containers:
             - name: verify-audiobookshelf
               image: *python

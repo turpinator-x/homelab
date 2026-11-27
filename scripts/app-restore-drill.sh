@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/app-restore-drill.sh linkding|audiobookshelf [--from-pi] [--keep]
+# Usage: ./scripts/app-restore-drill.sh linkding|audiobookshelf|forgejo [--from-pi] [--keep]
 # --from-pi restores from the copy on pisrv01 (and runs there, in namespace app-backup-mirror) instead of from R2.
 # Restores the newest backup into a temporary pod, checks it against the backup's manifest,
 # and starts a second copy of the app on the restored data. The live app and its volumes are not mounted or changed.
@@ -25,7 +25,10 @@ case $app in
   audiobookshelf)
     uid=1000 port=3005 data='' health=/healthcheck
     image=$(grep -m1 -oE 'ghcr.io/advplyr/audiobookshelf:[0-9.]+' apps/base/audiobookshelf/deployment.yaml) ;;
-  *) echo "usage: $0 linkding|audiobookshelf [--from-pi] [--keep]" >&2; exit 2 ;;
+  forgejo)
+    uid=1000 port=3000 data=/var/lib/gitea health=/api/healthz
+    image=$(grep -m1 -oE 'codeberg.org/forgejo/forgejo:[^ ]+' apps/base/forgejo/deployment.yaml) ;;
+  *) echo "usage: $0 linkding|audiobookshelf|forgejo [--from-pi] [--keep]" >&2; exit 2 ;;
 esac
 python=$(grep -m1 -oE 'sissbruecker/linkding:[0-9.]+' apps/staging/linkding/backup.yaml)
 restic=$(grep -m1 -oE 'restic/restic:[0-9.]+@sha256:[0-9a-f]+' "apps/staging/$app/backup.yaml")
@@ -65,7 +68,7 @@ scripts=$(k get cronjob "$cronjob" -o json |
   jq -r '.spec.jobTemplate.spec.template.spec.volumes[] | select(.name=="code") | .configMap.name')
 [ -z "$(k get pod "$pod" --ignore-not-found -o name)" ] || { echo "pod $pod already exists; delete it first" >&2; exit 1; }
 
-if [ "$app" = linkding ]; then
+if [ "$app" != audiobookshelf ]; then
   mounts="[{name: restored, mountPath: $data, subPath: snapshot}]"
   env='[]'
 else

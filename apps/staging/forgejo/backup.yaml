@@ -1,0 +1,119 @@
+# Nightly Forgejo backup to R2 (docs/forgejo.md). Forgejo is paused while its data is copied: quiesce.py asks,
+# and supervise.sh in Forgejo's container stops it. The job gets no cluster access, and the pause request expires by
+# itself. The local-path volume pins this pod to the node that holds it. AI-assisted (Claude Code).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: forgejo-backup
+  labels:
+    app: forgejo-backup
+spec:
+  schedule: "0 3 * * *" # after the other app backups, before the BlockOne ones (03:30)
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600 # a run missed by more than an hour (node down) waits for the next night
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: forgejo-backup # not "forgejo": the Service must never send traffic here
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000 # Forgejo's user, so every file is readable
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: snapshot
+              image: sissbruecker/linkding:1.47.0
+              command: ["python", "/code/quiesce.py", "/code/forgejo.json", "/data", "/work/snapshot"]
+              env:
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+                - { name: PAUSE_SECONDS, value: "600" }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                # Not read-only: reading a SQLite database in WAL mode needs to write its shared-memory file.
+                - { name: data, mountPath: /data }
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: work, mountPath: /work }
+          containers:
+            - name: backup
+              image: restic/restic:0.20.0@sha256:93999df80d4ac6cb148e82d2ef1fe6a81996f17ff535e772723538211b31555a
+              command: ["sh", "/code/backup.sh"]
+              envFrom:
+                - secretRef:
+                    name: forgejo-backup # repository, password and R2 keys, SOPS-encrypted
+              env:
+                - { name: BACKUP_APP, value: forgejo }
+                - { name: SNAPSHOT_DIR, value: /work/snapshot }
+                - { name: TMPDIR, value: /tmp }
+                - { name: HOME, value: /tmp }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: work, mountPath: /work, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: forgejo-data
+            - name: code
+              configMap:
+                name: app-backup-scripts
+            - name: work
+              emptyDir: { sizeLimit: 1Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 1Gi }
+---
+# The backup pod: DNS, and HTTPS to public addresses (R2). Nothing may connect to it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forgejo-backup
+spec:
+  podSelector:
+    matchLabels:
+      app: forgejo-backup
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - { port: 443, protocol: TCP }

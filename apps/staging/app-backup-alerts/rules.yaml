@@ -1,4 +1,4 @@
-# Alerts for the nightly Linkding and Audiobookshelf backups and their copy on pisrv01, from kube-state-metrics' CronJob and Job metrics.
+# Alerts for the nightly Linkding, Audiobookshelf and Forgejo backups and their copy on pisrv01, from kube-state-metrics' CronJob and Job metrics.
 # The label is what this Prometheus's ruleSelector matches. Tests: tests/rules.test.yaml.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -13,7 +13,7 @@ spec:
         - alert: AppBackupStale
           # Nightly jobs: more than 26 hours since the last success means last night's run didn't succeed
           expr: |
-            time() - kube_cronjob_status_last_successful_time{namespace=~"linkding|audiobookshelf|app-backup-mirror", cronjob=~"(linkding|audiobookshelf)-backup|app-backup-mirror"} > 26 * 3600
+            time() - kube_cronjob_status_last_successful_time{namespace=~"linkding|audiobookshelf|forgejo|app-backup-mirror", cronjob=~"(linkding|audiobookshelf|forgejo)-backup|app-backup-mirror"} > 26 * 3600
           for: 10m
           labels:
             severity: critical
@@ -23,7 +23,7 @@ spec:
         - alert: AppBackupNeverSucceeded
           # The metric above only exists after a first success
           expr: |
-            (time() - kube_cronjob_created{namespace=~"linkding|audiobookshelf|app-backup-mirror", cronjob=~"(linkding|audiobookshelf)-backup|app-backup-mirror"} > 26 * 3600)
+            (time() - kube_cronjob_created{namespace=~"linkding|audiobookshelf|forgejo|app-backup-mirror", cronjob=~"(linkding|audiobookshelf|forgejo)-backup|app-backup-mirror"} > 26 * 3600)
             unless on (namespace, cronjob) kube_cronjob_status_last_successful_time
           for: 10m
           labels:
@@ -38,6 +38,8 @@ spec:
             or absent(kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup"})
             or absent(kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"})
             or absent(kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup-restore-check"})
+            or absent(kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup"})
+            or absent(kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup-restore-check"})
             or absent(kube_cronjob_created{namespace="app-backup-mirror", cronjob="app-backup-mirror"})
           for: 30m
           labels:
@@ -48,9 +50,9 @@ spec:
         - alert: AppBackupRestoreCheckStale
           # Monthly: more than 33 days since the last success, or 33 days old without one
           expr: |
-            (time() - kube_cronjob_status_last_successful_time{namespace=~"linkding|audiobookshelf", cronjob=~"(linkding|audiobookshelf)-backup-restore-check"} > 33 * 86400)
+            (time() - kube_cronjob_status_last_successful_time{namespace=~"linkding|audiobookshelf|forgejo", cronjob=~"(linkding|audiobookshelf|forgejo)-backup-restore-check"} > 33 * 86400)
             or (
-              (time() - kube_cronjob_created{namespace=~"linkding|audiobookshelf", cronjob=~"(linkding|audiobookshelf)-backup-restore-check"} > 33 * 86400)
+              (time() - kube_cronjob_created{namespace=~"linkding|audiobookshelf|forgejo", cronjob=~"(linkding|audiobookshelf|forgejo)-backup-restore-check"} > 33 * 86400)
               unless on (namespace, cronjob) kube_cronjob_status_last_successful_time
             )
           for: 1h
@@ -62,7 +64,7 @@ spec:
         - alert: AppBackupJobFailed
           # A run that failed (after its one retry), shown for a day so a later success doesn't hide it at once
           expr: |
-            kube_job_failed{namespace=~"linkding|audiobookshelf|app-backup-mirror", job_name=~"((linkding|audiobookshelf)-backup|app-backup-mirror)-.+", condition="true"} == 1
+            kube_job_failed{namespace=~"linkding|audiobookshelf|forgejo|app-backup-mirror", job_name=~"((linkding|audiobookshelf|forgejo)-backup|app-backup-mirror)-.+", condition="true"} == 1
             and on (namespace, job_name) (time() - kube_job_created < 24 * 3600)
           labels:
             severity: warning

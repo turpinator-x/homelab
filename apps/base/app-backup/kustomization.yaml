@@ -8,5 +8,7 @@ configMapGenerator:
       - mirror.sh
       - snapshot.py
       - verify.py
+      - quiesce.py
+      - forgejo.json
       - linkding.json
       - audiobookshelf.json

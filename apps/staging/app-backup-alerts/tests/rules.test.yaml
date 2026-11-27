@@ -22,6 +22,12 @@ tests:
         values: '0x2000'
       - series: 'kube_cronjob_status_last_successful_time{namespace="app-backup-mirror", cronjob="app-backup-mirror"}'
         values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup-restore-check"}'
+        values: '0x2000'
     alert_rule_test:
       - {eval_time: 25h, alertname: AppBackupStale, exp_alerts: []}
       - {eval_time: 25h, alertname: AppBackupNeverSucceeded, exp_alerts: []}
@@ -73,6 +79,12 @@ tests:
       - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup-restore-check"}'
         values: '0x2000'
       - series: 'kube_cronjob_created{namespace="app-backup-mirror", cronjob="app-backup-mirror"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup-restore-check"}'
         values: '0x2000'
     alert_rule_test:
       - {eval_time: 20m, alertname: AppBackupMissing, exp_alerts: []}
@@ -156,3 +168,29 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, namespace: app-backup-mirror, job_name: app-backup-mirror-123, condition: "true"}
             exp_annotations: {summary: "Backup job app-backup-mirror-123 failed", description: "kubectl --context homelab -n app-backup-mirror logs job/app-backup-mirror-123 --all-containers", runbook: docs/backups.md (Alerts)}
+  - name: a stale Forgejo backup alerts
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="forgejo", cronjob="forgejo-backup"}'
+        values: '0x2000'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: AppBackupStale
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: forgejo, cronjob: forgejo-backup}
+            exp_annotations: {summary: "forgejo-backup has not succeeded for more than 26 hours", runbook: docs/backups.md (Alerts)}
+  - name: a failed Forgejo backup job warns
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="forgejo", job_name="forgejo-backup-123", condition="true"}'
+        values: '1x200'
+      - series: 'kube_job_created{namespace="forgejo", job_name="forgejo-backup-123"}'
+        values: '0x200'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AppBackupJobFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: forgejo, job_name: forgejo-backup-123, condition: "true"}
+            exp_annotations: {summary: "Backup job forgejo-backup-123 failed", description: "kubectl --context homelab -n forgejo logs job/forgejo-backup-123 --all-containers", runbook: docs/backups.md (Alerts)}
