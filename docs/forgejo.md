@@ -29,7 +29,7 @@ The two weeks start when `chain-explorer` is imported.
 
 ## Build order
 
-- [ ] 1. Forgejo running on the cluster at `git.home.arpa`.
+- [x] 1. Forgejo running on the cluster at `git.home.arpa` (2026-11-27).
 - [ ] 2. The account, sign-in and the laptop's certificate trust.
 - [ ] 3. Nightly backup with alerts, copied to pisrv01.
 - [ ] 4. Restore into a separate working copy, from R2 and from pisrv01.
@@ -47,6 +47,23 @@ The two weeks start when `chain-explorer` is imported.
 | Settings | `apps/base/forgejo/forgejo.env` (no secrets in it) |
 | Turned off | sign-ups, SSH, Actions, packages, mirrors, federation, mail, update check, external avatars, Git hooks |
 | Certificate | `apps/staging/forgejo/forgejo-tls-secret.yaml` (SOPS), expires 2027-11-27 |
+
+## Account setup (owner, once)
+
+Run `./scripts/setup-forgejo-account.sh` in a terminal. It adds `git.home.arpa` to `/etc/hosts`, saves the public certificate under `~/.config/forgejo-trial/`, and creates one admin account with a temporary password that must be changed at the first sign-in. It creates nothing if an account already exists.
+
+## Checks so far (2026-11-27)
+
+| Check | Result |
+|---|---|
+| Pod | running, no restarts or warning events at first start |
+| HTTPS with the certificate trusted | health check passed; without trusting it, curl refused the connection |
+| Plain HTTP | 404 |
+| Repo list while signed out | redirected to sign-in |
+| Git with the certificate trusted | got as far as asking for a username |
+| Setup script, against a local container | bad or reserved username: no account; good run: one admin account; rerun: no change; failing account command or a conflicting hosts entry: stops. The `sudo` and hosts-file steps used a test file |
+
+**Not tested yet:** that the network policy blocks outbound connections and connections from other pods (the attempt to test outbound from inside the live container was stopped by the coding agent's safety check), data surviving a restart, push, and backup.
 
 **Limit:** the data is on one node's disk. Until step 3 is done, nothing in Forgejo is backed up, so nothing goes into it that isn't also on GitHub.
 
