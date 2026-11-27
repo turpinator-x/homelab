@@ -1,0 +1,9 @@
+{
+  "databases": ["db.sqlite3"],
+  "paths": ["assets", "favicons", "previews", "secretkey.txt"],
+  "required": ["secretkey.txt"],
+  "counts": {
+    "bookmarks": { "database": "db.sqlite3", "query": "SELECT COUNT(*) FROM bookmarks_bookmark", "minimum": 0 },
+    "users": { "database": "db.sqlite3", "query": "SELECT COUNT(*) FROM auth_user", "minimum": 1 }
+  }
+}

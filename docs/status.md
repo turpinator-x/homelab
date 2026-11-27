@@ -2,7 +2,7 @@
 
 Working notes on what's running, what's next, and what's known to be broken. Updated after each change; the README holds the polished summary.
 
-_Last updated: 2026-11-16_
+_Last updated: 2026-11-27_
 
 ## Running
 
@@ -27,9 +27,10 @@ _Last updated: 2026-11-16_
 
 ## Next
 
+0. **In progress:** backups for Linkding and Audiobookshelf ([backups.md](backups.md)). Linkding's scripts pass a local backup and restore test with sample data; nothing is deployed yet. Next: the R2 bucket and keys (owner steps).
 0. **In progress (PR, label `production-change`):** BlockOne weekly read-only storage report (`blockone-storage-report`, Sundays 03:00): per-folder sizes with no private names, growth since last week, digest to Telegram through Alertmanager (critical with a `GROWTH:` prefix past 20 percent / 500 MiB / 250 MiB per folder), failure alerts. Built because the nightly case-files archive grew 76 to 430 MiB in four steps with the cause unknown. See `docs/blockone-crypto-tax.md`, "Weekly storage report". First live run is the check after merge.
 0. **In progress (PR, label `production-change`):** BlockOne app monitoring: the API's `/metrics` scraped by Prometheus (ServiceMonitor, NetworkPolicy from `monitoring`, port 9464 internal only), 12 alert rules (`app-alerts.yaml`, promtool-tested) and a Telegram route for `BlockOne*` warning and critical alerts. Design: app repo `reports/40_error_capture_resilience`. After merge: check the target is up and the rules loaded (`docs/blockone-crypto-tax.md`, "App metrics and alerts").
-0. **In progress:** nightly encrypted backups for the BlockOne Crypto Tax app (branch `feat/blockone-backups`): `blockone-backup` (pg_dump + case files, rclone crypt, to R2) and `blockone-backup-mirror` (copy to pisrv01, decrypt and check last night's), 35 days each, alerts, a Git-run restore Job. Drilled end to end in kind with MinIO; waits for the R2 bucket, two tokens and the two SOPS Secrets. See `docs/blockone-crypto-tax.md`, "Backups and restore".
+0. **Running (checked 2026-11-27):** nightly encrypted backups for the BlockOne Crypto Tax app: the latest `blockone-backup` and `blockone-backup-mirror` runs completed, and the mirror's check of the newest set passed. See `docs/blockone-crypto-tax.md`, "Backups and restore" (restore drills and open gaps are listed there).
 0. **Done 2026-11-10:** self-hosted GitHub Actions runners (ARC 0.15.1, `infrastructure/arc/`, own `arc` Kustomization), used by `claims-app` and `blockone-devops-ai-journey`. Other private repos switch one at a time. See `docs/github-runners.md`.
 0. **Waiting on the owner (branch `feat/blockproof-hostnames`):** BlockProof hostnames `app.blockproof.tax`, `staging.blockproof.tax` and a private holding page on `blockproof.tax`, next to the old `jarrodturpin.dev` hostnames. Needs the `production-change` label, then DNS records and the new hostnames on the two existing Access applications (`docs/blockone-crypto-tax.md`, "blockproof.tax hostnames").
 0. **Waiting on the owner:** BlockOne staging is deployed (owner steps done); next, the release flow in the app repo (`scripts/release/stage.sh`, `promote.sh`, `rollback.sh`). First restore drill on the homelab: `scripts/blockone-restore-drill.sh --fresh`. Backup gaps to decide: `docs/blockone-crypto-tax.md`, "Backup security review" (the Alertmanager receiver is done: Telegram, `docs/monitoring.md`). Create the `production-change` PR label (rollback PRs need it). Review the production restore Job change (whole-schema restore).
