@@ -129,6 +129,28 @@ Not needed now: CPU was at 4% when this was checked. Revisit after the first bus
 
 ## Maintenance log
 
+### 2026-11-27: Memory reserved for the system and k3s on minisrv01
+
+The kubelet reserved nothing, so pods could use all of the node's memory, including what the OS and k3s need. `/etc/rancher/k3s/config.yaml` on minisrv01 (set by hand: node settings are not managed by Flux) now holds:
+
+```yaml
+kubelet-arg:
+  - "system-reserved=memory=2Gi"
+  - "kube-reserved=memory=2Gi"
+  - "eviction-hard=memory.available<500Mi,nodefs.available<5%,imagefs.available<5%"
+  - "eviction-soft=memory.available<1536Mi"
+  - "eviction-soft-grace-period=memory.available=90s"
+```
+
+Setting `eviction-hard` replaces the whole list, so the two disk thresholds k3s already used are repeated in it.
+
+- **Why 4 GiB:** before the change, memory used outside pods was about 2.2 GiB (working set), or about 4 GiB summing `system.slice`, `user.slice` and `docker`, which counts more file cache.
+- **Apply:** create the file, then `sudo systemctl restart k3s`. Running containers keep running.
+- **Checked afterwards:** the kubelet reports all five settings, allocatable went from 31,603,284 Ki to 26,896,980 Ki, `kubepods.slice` has `memory.max` 28,066,795,520 bytes (capacity minus 4 GiB), both nodes are Ready, all Flux Kustomizations are Ready, and no pod was unhealthy or evicted.
+- **Not tested:** eviction under real memory pressure.
+- **Limits of this protection:** it caps all pods together. It does not decide which pod loses inside that cap, so a fast spike could still hit a production pod. Anything outside `kubepods.slice` is not capped (for Docker-in-Docker job containers, see [github-runners.md](github-runners.md)).
+- **Undo:** delete the file and restart k3s.
+
 ### 2026-11-27: BIOS graphics memory cut, then Postgres stuck after the reboot
 
 - The BIOS change worked: 30 GiB visible to Linux, 512M of graphics memory.
