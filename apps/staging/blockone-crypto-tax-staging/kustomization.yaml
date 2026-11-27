@@ -175,7 +175,7 @@ patches:
         value: blockone-staging
 images:
   # Moved by scripts/release/stage.sh (app repo) after each app merge; production's pin is separate.
-  # Built from the app repo's main fdda38d: fix(chain): bound memory of a huge wallet's read; fail it alone instead of OOMKi
+  # Built from the app repo's main 3eb15ed: fix(flarebank): close the books against on-chain balanceOf at a pinned block
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-fdda38dea32b77c2b722a183aa8ee22e30f2b84d
-    digest: sha256:bb829729b6999838d935ca8aff454a7b60b97fc44bb845b293f83b1efe9cbedb
+    newTag: sha-3eb15ed3043c8b265dca09bfee12b36fc86dbd6b
+    digest: sha256:f3f3aa6c0dc0b3c171bf788c82362ce6ab26034e83f570bd66cdff950c986061
