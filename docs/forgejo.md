@@ -55,6 +55,12 @@ Run `./scripts/setup-forgejo-account.sh` in a terminal. It adds `git.home.arpa` 
 
 **Lost password:** run `./scripts/reset-forgejo-password.sh`. It shows your username, then sets a new temporary password (to be changed at the next sign-in) and copies it to the clipboard, marked sensitive. Tested against a local container with the clipboard step replaced: no account, cancel and two accounts change nothing; after a reset the new password gets "you must change your password" and a wrong one is refused.
 
+## Import (owner, once)
+
+In Forgejo, create an empty private repository `chain-explorer` and an access token with only `repository: read and write`. Then run `./scripts/import-forgejo-repo.sh`: it asks for the username and token, copies the code and history from GitHub (read only), downloads them again to check them, and leaves a clone in `~/projects/forgejo-trial/chain-explorer` whose only remote is Forgejo. Git keeps the token in memory for up to 8 hours (`credential cache`), not in the plain-text `store` helper that is set globally on the laptop. The script removes the token from the clipboard history file. After 8 hours or a restart, paste it again from the password manager.
+
+Tested against a local container over HTTP (10 cases: missing repository, wrong, malformed and read-only tokens, a good run, history cleanup, a later push, no token in any file and no plain-text store, rerun, and a repository with other content). The certificate setting is first used on the real run.
+
 ## Checks so far (2026-11-27)
 
 | Check | Result |
