@@ -62,13 +62,3 @@ The dind scale sets therefore write the pod template out in full instead of usin
 ## Docker-in-Docker and file permissions (umask)
 
 The same first test run also failed the curriculum's permissions lesson: new files came out as `-rw-rw-rw-`. Since Docker 29.6.0, commands started with `docker exec` inside Docker-in-Docker get a umask of 0000 instead of 0022. Plain `docker run` and Docker on a normal host are not affected. Tested 2026-11-10: 28.5.2, 29.4.0 and 29.5.2 give 0022; 29.6.0 to 29.9.2 give 0000. The dind sidecar is held at 29.5.2 (a Renovate rule keeps it below 29.6). To re-test a newer release: start `docker:<version>-dind` privileged, run a container inside it, and check that `docker exec <container> sh -c umask` prints 0022.
-
-## Capacity change (2026-11-26)
-
-GitHub Actions spend kept passing the budget, so more private-repo jobs move here. Changes:
-
-- New scale set `homelab-blockone-crypto-tax` (max 3 runners, 2 CPU / 3 GiB each, no Docker) for that repo's pytest shards and secret-scan. Its image build stays on GitHub's runners for now.
-- `homelab-claims-app` max runners 1 to 2, so its web and workers CI jobs run side by side.
-- `arc-runners` quota 4 CPU / 8 GiB / 3 pods to 12 CPU / 22 GiB / 8 pods. Jobs beyond the quota wait in the queue. Limits are caps, not use: minisrv01 (16 cores, 24 GB) was at 4% CPU and 29% memory on 2026-11-26, and the namespace quota can't be reached together with the model platform's share without jobs queueing first. Watch `kubectl top nodes` after the first busy day.
-- **Manual step:** the `homelab-actions-runners` GitHub App must be installed on `blockone-crypto-tax` (Settings, Developer settings, GitHub Apps, Configure, Repository access). Until then the new scale set can't register and no job uses it.
-- The workflow edits (`runs-on: homelab-blockone-crypto-tax`) belong to that repo and go in its own PR.

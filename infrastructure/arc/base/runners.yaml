@@ -44,7 +44,7 @@ spec:
     githubConfigSecret: arc-github-app
     runnerScaleSetName: homelab-claims-app
     minRunners: 0
-    maxRunners: 2
+    maxRunners: 1
     controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
     template:
       spec:
@@ -57,37 +57,6 @@ spec:
             resources:
               requests: { cpu: 500m, memory: 1Gi }
               limits: { cpu: "3", memory: 6Gi }
----
-# blockone-crypto-tax: the offline pytest shards and secret-scan (no Docker needed). Its image build keeps
-# using GitHub's runners until a dind scale set is worth adding. Three at once, one per test shard group.
-apiVersion: helm.toolkit.fluxcd.io/v2
-kind: HelmRelease
-metadata:
-  name: homelab-blockone-crypto-tax
-  namespace: arc-runners
-spec:
-  interval: 30m
-  chartRef:
-    kind: OCIRepository
-    name: gha-runner-scale-set
-  values:
-    githubConfigUrl: https://github.com/turpinator-x/blockone-crypto-tax
-    githubConfigSecret: arc-github-app
-    runnerScaleSetName: homelab-blockone-crypto-tax
-    minRunners: 0
-    maxRunners: 3
-    controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
-    template:
-      spec:
-        nodeSelector:
-          kubernetes.io/hostname: minisrv01
-        containers:
-          - name: runner
-            image: ghcr.io/actions/actions-runner:2.338.2
-            command: ["/home/runner/run.sh"]
-            resources:
-              requests: { cpu: 500m, memory: 1Gi }
-              limits: { cpu: "2", memory: 3Gi }
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
