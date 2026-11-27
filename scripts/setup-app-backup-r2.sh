@@ -46,6 +46,7 @@ echo
 echo "Part A: paste three values from the Cloudflare token page. The keys stay invisible as you paste."
 read -r -p "1) S3 endpoint (starts with https://): " endpoint
 endpoint=${endpoint%/}
+endpoint=${endpoint%"/$bucket"} # the bucket settings page shows the link with the bucket name on the end
 [[ $endpoint =~ ^https://[0-9a-f]{32}(\.eu)?\.r2\.cloudflarestorage\.com$ ]] ||
   die "that is not an R2 endpoint (expected https://<account id>.r2.cloudflarestorage.com, nothing after it)"
 read -r -s -p "2) Access Key ID: " key_id; echo
