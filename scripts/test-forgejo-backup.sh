@@ -61,6 +61,10 @@ liveness "$id-app" || fail "liveness command fails on a healthy app"
 pass "starts under the wrapper; the liveness command succeeds"
 docker exec "$id-app" forgejo admin user create --admin --username tester --email tester@git.home.arpa \
   --password "$user_password" --must-change-password=false > /dev/null
+# A new Forgejo with no repository yet has no repository folder: it must still back up
+quiesce /code/forgejo.json /snap/empty > /dev/null || fail "an instance with no repository could not be backed up"
+wait_healthy "$id-app" 13100
+pass "an instance with no repository is backed up"
 curl -fsS -u "tester:$user_password" -H 'Content-Type: application/json' -d '{"name":"demo","private":true}' \
   http://127.0.0.1:13100/api/v1/user/repos > /dev/null
 gitc init -q -b main "$work/src"
@@ -112,6 +116,13 @@ grep -qF "required data is missing" <<< "$out" || fail "failed for another reaso
 wait_healthy "$id-app" 13100
 no_request || fail "request left behind after a failed snapshot"
 pass "failed snapshot: reported, request removed, Forgejo running again"
+
+vol sh -c 'mv /data/git/repositories/tester/demo.git /data/demo.git.away'
+if out=$(quiesce /code/forgejo.json /snap/missing 2>&1); then fail "a listed repository was missing and the snapshot passed"; fi
+grep -qF "the database lists it, but it is not in the copy: git/repositories/tester/demo.git/HEAD" <<< "$out" || fail "failed for another reason: $out"
+vol sh -c 'mv /data/demo.git.away /data/git/repositories/tester/demo.git'
+wait_healthy "$id-app" 13100
+pass "a repository missing from disk fails the backup, and Forgejo runs again"
 
 # A job that dies without cleaning up: only the request's expiry can bring Forgejo back
 # shellcheck disable=SC2016 # expands inside the container, on its clock

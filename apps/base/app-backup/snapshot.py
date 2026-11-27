@@ -56,6 +56,12 @@ def count_rows(root, rule):
         return db.execute(rule["query"]).fetchone()[0]
 
 
+def query_column(root, rule):
+    uri = f"file:{root / rule['database']}?mode=ro&immutable=1"
+    with closing(sqlite3.connect(uri, uri=True)) as db:
+        return [row[0] for row in db.execute(rule["query"])]
+
+
 def copy_database(source, target):
     if not source.is_file():
         raise BackupError(f"database not found: {source.name}")
@@ -96,6 +102,12 @@ def snapshot(spec, source, dest):
         # An app that lost its volume starts with a new, empty database. Don't save that as a good backup.
         if counts[label] < rule["minimum"]:
             raise BackupError(f"{label}: found {counts[label]}, expected at least {rule['minimum']}")
+
+    # Files the database says must be there, such as each repository's. None are needed when it lists nothing.
+    for rule in spec.get("files_for_rows", []):
+        for name in query_column(dest, rule):
+            if not (dest / name).is_file():
+                raise BackupError(f"the database lists it, but it is not in the copy: {name}")
 
     files = {name: sha256(dest / name) for name in list_files(dest)}
     (dest / MANIFEST).write_text(json.dumps({"counts": counts, "files": files}, indent=2) + "\n")
