@@ -1,7 +1,13 @@
 {
   "databases": ["data/forgejo.db"],
   "paths": ["custom", "git", "jwt", "actions_id_token", "data/attachments", "data/avatars", "data/repo-avatars"],
-  "required": ["custom/conf/app.ini", "git/repositories", "jwt/private.pem"],
+  "required": ["custom/conf/app.ini", "git", "jwt/private.pem"],
+  "files_for_rows": [
+    {
+      "database": "data/forgejo.db",
+      "query": "SELECT 'git/repositories/' || lower(owner_name) || '/' || lower_name || '.git/HEAD' FROM repository"
+    }
+  ],
   "counts": {
     "users": { "database": "data/forgejo.db", "query": "SELECT COUNT(*) FROM \"user\"", "minimum": 1 },
     "repositories": { "database": "data/forgejo.db", "query": "SELECT COUNT(*) FROM repository", "minimum": 0 }
