@@ -368,7 +368,7 @@ spec:
                       # container fails the Job after it has printed its result.
                       /bin/sh /scripts/backup-prune.sh local: || { echo "prune: FAILED (exit $?)" >&2; echo prune > /verify/step-failed; }
                       rclone rmdirs /mirror/blockone --leave-root
-                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 42949672960 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
+                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 128849018880 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
                       ;;
                     *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
                   esac
