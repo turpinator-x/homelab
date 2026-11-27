@@ -2,6 +2,8 @@
 
 AI-assisted (planned and written with Claude Code). **Status (2026-11-27):** both apps back up nightly to R2, pisrv01 pulls a second copy, alerts and a monthly restore check are in place, and both apps have been restored from R2 and from pisrv01 and started as separate copies. Scheduled (not hand-started) runs have not been observed yet.
 
+**Forgejo** joined the same system later that day; it is paused briefly while its data is copied. See [forgejo.md](forgejo.md), "Backup and restore". The rest of this page, apart from the alerts, describes the first two apps.
+
 The BlockOne Crypto Tax app has its own backups ([blockone-crypto-tax.md](blockone-crypto-tax.md), "Backups and restore"); this plan doesn't change them.
 
 ## Goal

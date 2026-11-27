@@ -42,7 +42,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 - [docs/monitoring.md](docs/monitoring.md): monitoring
 - [docs/audiobookshelf.md](docs/audiobookshelf.md): translating a Docker Compose app into Kubernetes manifests
 - [docs/dashboard.md](docs/dashboard.md): the public dashboard
-- [docs/backups.md](docs/backups.md): encrypted nightly backups of Linkding and Audiobookshelf to off-site storage and a second node, with alerts and tested restores (AI-assisted)
+- [docs/backups.md](docs/backups.md): encrypted nightly backups of Linkding, Audiobookshelf and Forgejo to off-site storage and a second node, with alerts and tested restores (AI-assisted)
 - [docs/forgejo.md](docs/forgejo.md): a two-week trial of self-hosted Git on the home network, with its pass criteria set in advance (AI-assisted)
 - [docs/llm.md](docs/llm.md): a self-hosted model platform, in progress (AI-assisted)
 - [docs/homepage.md](docs/homepage.md): the LAN start page

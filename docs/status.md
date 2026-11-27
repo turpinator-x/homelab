@@ -20,7 +20,7 @@ _Last updated: 2026-11-27_
 | Claim watch | `apps/*/claim-watch` | read-only CronJob every 15 min: Telegram reminders for DeFi claims and Flare restakes, no keys (`docs/claim-watch.md`); image from private `defi-claim-watch` repo |
 | Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 15 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
-| Forgejo (trial) | `apps/*/forgejo` | self-hosted Git on the home network only; two-week trial in progress, not backed up yet (`docs/forgejo.md`) |
+| Forgejo (trial) | `apps/*/forgejo` | self-hosted Git on the home network only, backed up nightly like the other apps; two-week trial being set up (`docs/forgejo.md`) |
 | CI | `.github/workflows/validate.yaml` | kubeconform on push/PR; not a required check |
 | Secret scan | `.github/workflows/secret-scan.yaml` | gitleaks over the full history; not a required check |
 | Repo baseline | `.pre-commit-config.yaml` | since 2026-11-04: Commitizen, secret checks and shellcheck through pre-commit |
@@ -28,7 +28,7 @@ _Last updated: 2026-11-27_
 
 ## Next
 
-0. **Running (since 2026-11-27):** backups for Linkding and Audiobookshelf to R2 with a copy on pisrv01, Telegram alerts and a monthly restore check; both restored from each place and started as separate copies ([backups.md](backups.md)). To check: the first scheduled runs. Not rehearsed: replacing live data.
+0. **Running (since 2026-11-27):** backups for Linkding, Audiobookshelf and Forgejo to R2 with a copy on pisrv01, Telegram alerts and a monthly restore check; each restored from each place and started as a separate copy ([backups.md](backups.md)). To check: the first scheduled runs. Not rehearsed: replacing live data.
 0. **In progress (PR, label `production-change`):** BlockOne weekly read-only storage report (`blockone-storage-report`, Sundays 03:00): per-folder sizes with no private names, growth since last week, digest to Telegram through Alertmanager (critical with a `GROWTH:` prefix past 20 percent / 500 MiB / 250 MiB per folder), failure alerts. Built because the nightly case-files archive grew 76 to 430 MiB in four steps with the cause unknown. See `docs/blockone-crypto-tax.md`, "Weekly storage report". First live run is the check after merge.
 0. **In progress (PR, label `production-change`):** BlockOne app monitoring: the API's `/metrics` scraped by Prometheus (ServiceMonitor, NetworkPolicy from `monitoring`, port 9464 internal only), 12 alert rules (`app-alerts.yaml`, promtool-tested) and a Telegram route for `BlockOne*` warning and critical alerts. Design: app repo `reports/40_error_capture_resilience`. After merge: check the target is up and the rules loaded (`docs/blockone-crypto-tax.md`, "App metrics and alerts").
 0. **Running (checked 2026-11-27):** nightly encrypted backups for the BlockOne Crypto Tax app: the latest `blockone-backup` and `blockone-backup-mirror` runs completed, and the mirror's check of the newest set passed. See `docs/blockone-crypto-tax.md`, "Backups and restore" (restore drills and open gaps are listed there).
