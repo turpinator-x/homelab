@@ -9,7 +9,7 @@
 #    volume fill.
 #  - There are deliberately no kubelet_volume_stats_* alerts: the live Prometheus has no such series for any
 #    production volume (only staging's), so a rule on them could never fire.
-#  - The mirror's own 40 Gi budget, the R2 bucket's 10 GB free allowance and the backup work volume's fill have no
+#  - The mirror's own 120 Gi budget, the R2 bucket's 10 GB free allowance and the backup work volume's fill have no
 #    metric: the nightly jobs log "size:" lines (WARNING from 75%, CRITICAL from 90%) and "work:" lines (WARNING from
 #    70%); see docs/blockone-crypto-tax.md, "Storage and alerts". Reading those logs is a manual check.
 apiVersion: monitoring.coreos.com/v1

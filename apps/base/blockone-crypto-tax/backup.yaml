@@ -361,14 +361,14 @@ spec:
                   set -euo pipefail
                   rclone copy "r2:$R2_BUCKET/blockone" /mirror/blockone --immutable --stats-one-line -v
                   # Same retention as R2 (backup-prune.sh), but only in the nightly run (bkv-* Jobs from promote.sh
-                  # skip it: a retention refusal must not block a release). The nightly run also logs the volume against its 40 Gi budget (the PVC is nominally 10 Gi: local-path does not enforce size, and the class cannot expand a bound PVC).
+                  # skip it: a retention refusal must not block a release). The nightly run also logs the volume against its 120 Gi budget (the PVC is nominally 10 Gi: local-path does not enforce size, and the class cannot expand a bound PVC).
                   case "$JOB_NAME" in
                     blockone-backup-mirror-*)
                       # A failed prune must not skip the decrypt check below: it is recorded, and the verify
                       # container fails the Job after it has printed its result.
                       /bin/sh /scripts/backup-prune.sh local: || { echo "prune: FAILED (exit $?)" >&2; echo prune > /verify/step-failed; }
                       rclone rmdirs /mirror/blockone --leave-root
-                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 42949672960 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
+                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 128849018880 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
                       ;;
                     *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
                   esac
