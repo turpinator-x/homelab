@@ -129,6 +129,14 @@ Not needed now: CPU was at 4% when this was checked. Revisit after the first bus
 
 ## Maintenance log
 
+### 2026-11-27: BIOS graphics memory cut, then Postgres stuck after the reboot
+
+- The BIOS change worked: 30 GiB visible to Linux, 512M of graphics memory.
+- After the reboot both BlockOne databases restarted in a loop. The startup probe allowed 150 s, and Postgres needed longer, so the kubelet killed it (exit 137) and recovery began again. The limit is now 15 minutes. A StatefulSet did not replace its not-ready pod, so each pod was deleted once to pick up the new probe. The data volumes were not touched.
+- **Open question:** in both databases, WAL replay finished almost at once, then about 5 minutes passed before the end-of-recovery checkpoint. The cause is unknown. Look into it before the next planned reboot (`log_startup_progress_interval` and the Postgres log around that gap are a starting point).
+- `pg_isready` also timed out at the default 1 s many times in staging during start-up, so all three probes now allow 5 s.
+- The api and worker pods recovered by themselves once the databases were ready (their `migrate` init container retries every 5 minutes at most).
+
 ### 2026-10-25: Hosts renamed to minisrv01 and pisrv01
 
 `srv1` became **minisrv01** and `srvpi01` became **pisrv01**: what the machine is, then its role, then a number. Each name now starts with a different letter, so `ssh m<Tab>` and `ssh p<Tab>` each complete to one machine. Done by Claude Code with a temporary passwordless sudo rule on both hosts, removed afterwards. (The server briefly went through an intermediate name, `srvmini01`, before the final choice, so the steps below ran twice for it.)
