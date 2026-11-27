@@ -1,0 +1,241 @@
+# Runner for blockone-crypto-tax's test shards (design: docs/github-runners.md, "blockone-crypto-tax").
+# PR code runs here, and the app's production database is on the same node, so this is deliberately tighter than the
+# other scale sets: its own namespace, no Docker (no privileged pod), default-deny network, no API token, one repo.
+# Needs the SOPS Secret arc-github-app in this namespace from a second GitHub App installed on this repo only
+# (owner step: infrastructure/arc/staging/arc-github-app-crypto-tax-secret.yaml, added to the PR before merge).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-runner
+value: -200
+globalDefault: false
+preemptionPolicy: Never
+description: "CI runners: below production (0) and BlockOne staging (-100); never preempts."
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners-crypto-tax
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: runner-defaults
+  namespace: arc-runners-crypto-tax
+spec:
+  limits:
+    - type: Container
+      default: { cpu: "2", memory: 2560Mi }
+      defaultRequest: { cpu: 250m, memory: 512Mi }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: runner-cap
+  namespace: arc-runners-crypto-tax
+spec:
+  hard: { requests.cpu: "3", requests.memory: 6Gi, limits.cpu: "6.5", limits.memory: 5632Mi, pods: "4" }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: arc-runners-crypto-tax
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Egress allowlist. The cluster CNI is k3s's default (flannel + kube-router NetworkPolicy): IP and port rules only, no
+# host names. So runner pods may talk only to DNS and to the egress proxy below (squid, allowing a short list of
+# hosts); only the proxy may reach the public internet. Runner pods get no route to the pod or Service networks,
+# the node, the home LAN or each other.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runner-egress
+  namespace: arc-runners-crypto-tax
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [egress-proxy] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              app: egress-proxy
+      ports:
+        - { port: 3128, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  podSelector:
+    matchLabels:
+      app: egress-proxy
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [egress-proxy] }
+      ports:
+        - { port: 3128, protocol: TCP }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports:
+        - { port: 443, protocol: TCP }
+        - { port: 80, protocol: TCP }
+---
+# The allowlist. Tightening later = edit this list. Gap: squid sees the CONNECT host name, not the content, so a
+# name on the list could still be used to move data (for example a GitHub repo or gist the job can write to).
+# Cache and artifact storage is Azure blob; only GitHub's results account names are allowed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egress-proxy-conf
+  namespace: arc-runners-crypto-tax
+data:
+  squid.conf: |
+    http_port 3128
+    acl allowed_hosts dstdomain .github.com .githubusercontent.com .githubapp.com
+    acl allowed_hosts dstdomain pypi.org files.pythonhosted.org
+    acl allowed_hosts dstdomain archive.ubuntu.com security.ubuntu.com
+    acl results_blob dstdom_regex -i ^productionresultssa[0-9]+\.blob\.core\.windows\.net$
+    acl ports port 80 443
+    http_access deny !ports
+    http_access allow allowed_hosts
+    http_access allow results_blob
+    http_access deny all
+    cache deny all
+    access_log stdout
+    cache_log /dev/null
+    pid_filename /tmp/squid.pid
+    coredump_dir /tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: egress-proxy }
+  template:
+    metadata:
+      labels: { app: egress-proxy }
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: minisrv01
+      priorityClassName: ci-runner
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: squid
+          image: ubuntu/squid:6.6-24.04_edge@sha256:d9c34c5ab74c6dd41cf1070d9b4221aac072e67e983527ca2d41512958f77506
+          args: ["-f", "/etc/squid-conf/squid.conf", "-NYC"]
+          ports:
+            - { name: proxy, containerPort: 3128 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: conf, mountPath: /etc/squid-conf, readOnly: true }
+      volumes:
+        - name: conf
+          configMap: { name: egress-proxy-conf }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+  namespace: arc-runners-crypto-tax
+spec:
+  selector: { app: egress-proxy }
+  ports:
+    - { name: proxy, port: 3128, targetPort: proxy }
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: gha-runner-scale-set
+  namespace: arc-runners-crypto-tax
+spec:
+  interval: 12h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  ref:
+    tag: "0.15.1"
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homelab-blockone-crypto-tax
+  namespace: arc-runners-crypto-tax
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: gha-runner-scale-set
+  values:
+    githubConfigUrl: https://github.com/turpinator-x/blockone-crypto-tax
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: homelab-blockone-crypto-tax
+    minRunners: 0
+    maxRunners: 2   # 6 shards queue two at a time: leaves minisrv01's cores for production and the model platform
+    controllerServiceAccount: { namespace: arc-systems, name: arc-gha-rs-controller }
+    template:
+      spec:
+        nodeSelector:
+          kubernetes.io/hostname: minisrv01   # amd64 (the Pi is arm64 and the backup mirror)
+        priorityClassName: ci-runner
+        automountServiceAccountToken: false    # a job (PR code) gets no Kubernetes API token
+        enableServiceLinks: false
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2
+            command: ["/home/runner/run.sh"]
+            env:
+              - { name: http_proxy, value: "http://egress-proxy:3128" }
+              - { name: https_proxy, value: "http://egress-proxy:3128" }
+              - { name: HTTP_PROXY, value: "http://egress-proxy:3128" }
+              - { name: HTTPS_PROXY, value: "http://egress-proxy:3128" }
+              - { name: no_proxy, value: "localhost,127.0.0.1" }
+              - { name: NO_PROXY, value: "localhost,127.0.0.1" }
+            resources:
+              # Memory request kept low on purpose: under node memory pressure the kubelet evicts pods using most above
+              # their request first (after priority), and a low request also raises the kernel OOM score, so a runner
+              # goes before production. Measured shard peak ~1.2 Gi with -n 2.
+              requests: { cpu: "1", memory: 512Mi }
+              limits: { cpu: "3", memory: 2560Mi }
