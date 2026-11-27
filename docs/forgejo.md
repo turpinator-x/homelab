@@ -52,6 +52,8 @@ The two weeks start when `chain-explorer` is imported.
 
 Run `./scripts/setup-forgejo-account.sh` in a terminal. It adds `git.home.arpa` to `/etc/hosts`, saves the public certificate under `~/.config/forgejo-trial/`, and creates one admin account with a temporary password that must be changed at the first sign-in. It creates nothing if an account already exists.
 
+**Lost password:** run `./scripts/reset-forgejo-password.sh`. It shows your username, then sets a new temporary password (to be changed at the next sign-in) and copies it to the clipboard, marked sensitive. Tested against a local container with the clipboard step replaced: no account, cancel and two accounts change nothing; after a reset the new password gets "you must change your password" and a wrong one is refused.
+
 ## Checks so far (2026-11-27)
 
 | Check | Result |
