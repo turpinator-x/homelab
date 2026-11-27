@@ -100,9 +100,19 @@ spec:
               - |
                 mtu=$(cat /sys/class/net/eth0/mtu)
                 iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu"
+                # A privileged pod sees the node's whole cgroup tree, so dockerd's default parent (/docker) puts job
+                # containers outside the pod, with no limit. Parent them under this pod's cgroup instead.
+                cg=$(sed -n 's/^0:://p' /proc/self/cgroup)
+                pod=${cg%/*}
+                case "$pod" in
+                  /kubepods.slice/*pod*.slice) ;;
+                  *) echo "unexpected cgroup path '$cg'; refusing to run jobs without a memory cap" >&2; exit 1 ;;
+                esac
+                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu" \
+                  --cgroup-parent="$pod/docker"
             # Docker builds and the jobs' containers run here, so dind gets most of the pod's share.
-            # Runner + dind = 4 CPU / 7Gi, so both dind scale sets fit the namespace quota (8 CPU / 14Gi).
+            # Runner + dind = 4 CPU / 7Gi, the whole namespace quota: one dind pod runs at a time.
+            # Job containers share the pod's 7Gi (see --cgroup-parent above).
             resources:
               requests: { cpu: 500m, memory: 1Gi }
               limits: { cpu: "3", memory: 5Gi }
@@ -176,9 +186,19 @@ spec:
               - |
                 mtu=$(cat /sys/class/net/eth0/mtu)
                 iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu"
+                # A privileged pod sees the node's whole cgroup tree, so dockerd's default parent (/docker) puts job
+                # containers outside the pod, with no limit. Parent them under this pod's cgroup instead.
+                cg=$(sed -n 's/^0:://p' /proc/self/cgroup)
+                pod=${cg%/*}
+                case "$pod" in
+                  /kubepods.slice/*pod*.slice) ;;
+                  *) echo "unexpected cgroup path '$cg'; refusing to run jobs without a memory cap" >&2; exit 1 ;;
+                esac
+                exec dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --group=123 --mtu="$mtu" \
+                  --cgroup-parent="$pod/docker"
             # Docker builds and the jobs' containers run here, so dind gets most of the pod's share.
-            # Runner + dind = 4 CPU / 7Gi, so both dind scale sets fit the namespace quota (8 CPU / 14Gi).
+            # Runner + dind = 4 CPU / 7Gi, the whole namespace quota: one dind pod runs at a time.
+            # Job containers share the pod's 7Gi (see --cgroup-parent above).
             resources:
               requests: { cpu: 500m, memory: 1Gi }
               limits: { cpu: "3", memory: 5Gi }

@@ -36,4 +36,4 @@ metadata:
   name: runner-cap
   namespace: arc-runners-dind
 spec:
-  hard: { limits.cpu: "8", limits.memory: 14Gi, pods: "6" }
+  hard: { limits.cpu: "4", limits.memory: 7Gi, pods: "6" }
