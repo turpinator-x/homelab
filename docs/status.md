@@ -20,7 +20,7 @@ _Last updated: 2026-11-27_
 | Claim watch | `apps/*/claim-watch` | read-only CronJob every 15 min: Telegram reminders for DeFi claims and Flare restakes, no keys (`docs/claim-watch.md`); image from private `defi-claim-watch` repo |
 | Renovate | `infrastructure/controllers/*/renovate` | hourly CronJob, 15 repos (the `args` in `cronjob.yaml`), GitHub App token minted per run |
 | kube-prometheus-stack | `monitoring/controllers` | Grafana on `*.home.arpa` with self-signed TLS |
-| Forgejo (trial) | `apps/*/forgejo` | self-hosted Git on the home network only, backed up nightly like the other apps; two-week trial being set up (`docs/forgejo.md`) |
+| Forgejo (trial) | `apps/*/forgejo` | self-hosted Git on the home network only, backed up nightly like the other apps; two-week trial since 2026-11-27 with a copy of `chain-explorer`, decision on or after 2026-12-11 (`docs/forgejo.md`) |
 | CI | `.github/workflows/validate.yaml` | kubeconform on push/PR; not a required check |
 | Secret scan | `.github/workflows/secret-scan.yaml` | gitleaks over the full history; not a required check |
 | Repo baseline | `.pre-commit-config.yaml` | since 2026-11-04: Commitizen, secret checks and shellcheck through pre-commit |
