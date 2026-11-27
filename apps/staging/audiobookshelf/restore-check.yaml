@@ -1,0 +1,78 @@
+# Monthly: restore the newest backup from R2 into a temporary volume and check it against the manifest saved with it
+# (files, checksums, database integrity, row counts). It checks the data; scripts/app-restore-drill.sh also starts
+# the app on it. The pod label is the backup's, so the same network policy applies (backup.yaml). AI-assisted.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audiobookshelf-backup-restore-check
+  labels:
+    app: audiobookshelf-backup
+spec:
+  schedule: "0 5 1 * *" # 05:00 on the 1st, after that night's backups
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 86400
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: audiobookshelf-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: restore
+              image: restic/restic:0.20.0@sha256:93999df80d4ac6cb148e82d2ef1fe6a81996f17ff535e772723538211b31555a
+              args: [--no-cache, --retry-lock, 10m, restore, latest, --host, audiobookshelf, --target, /restored/snapshot]
+              envFrom:
+                - secretRef:
+                    name: audiobookshelf-backup
+              env:
+                - { name: TMPDIR, value: /tmp }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - { name: restored, mountPath: /restored }
+                - { name: tmp, mountPath: /tmp }
+          containers:
+            - name: verify
+              image: sissbruecker/linkding:1.47.0
+              command: ["python", "/code/verify.py", "/code/audiobookshelf.json", "/restored/snapshot"]
+              env:
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - { name: restored, mountPath: /restored, readOnly: true }
+                - { name: code, mountPath: /code, readOnly: true }
+          volumes:
+            - name: code
+              configMap:
+                name: app-backup-scripts
+            - name: restored
+              emptyDir: { sizeLimit: 2Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 1Gi }

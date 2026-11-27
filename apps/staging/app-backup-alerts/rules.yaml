@@ -36,11 +36,27 @@ spec:
           expr: |
             absent(kube_cronjob_created{namespace="linkding", cronjob="linkding-backup"})
             or absent(kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup"})
+            or absent(kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"})
+            or absent(kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup-restore-check"})
           for: 30m
           labels:
             severity: critical
           annotations:
             summary: "The backup CronJob {{ $labels.cronjob }} does not exist (or its metrics are gone)"
+            runbook: docs/backups.md (Alerts)
+        - alert: AppBackupRestoreCheckStale
+          # Monthly: more than 33 days since the last success, or 33 days old without one
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time{namespace=~"linkding|audiobookshelf", cronjob=~"(linkding|audiobookshelf)-backup-restore-check"} > 33 * 86400)
+            or (
+              (time() - kube_cronjob_created{namespace=~"linkding|audiobookshelf", cronjob=~"(linkding|audiobookshelf)-backup-restore-check"} > 33 * 86400)
+              unless on (namespace, cronjob) kube_cronjob_status_last_successful_time
+            )
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.cronjob }} has had no successful monthly restore check for 33 days"
             runbook: docs/backups.md (Alerts)
         - alert: AppBackupJobFailed
           # A run that failed (after its one retry), shown for a day so a later success doesn't hide it at once

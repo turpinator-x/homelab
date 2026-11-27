@@ -7,4 +7,5 @@ resources:
   - cloudflare.yaml
   - cloudflare-secret.yaml
   - backup.yaml
+  - restore-check.yaml
   - audiobookshelf-backup-secret.yaml

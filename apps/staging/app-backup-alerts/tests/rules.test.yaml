@@ -14,6 +14,10 @@ tests:
         values: '0x2000'
       - series: 'kube_cronjob_status_last_successful_time{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
         values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup-restore-check"}'
+        values: '0x2000'
     alert_rule_test:
       - {eval_time: 25h, alertname: AppBackupStale, exp_alerts: []}
       - {eval_time: 25h, alertname: AppBackupNeverSucceeded, exp_alerts: []}
@@ -60,6 +64,10 @@ tests:
         values: '0x2000'
       - series: 'kube_cronjob_status_last_successful_time{namespace="linkding", cronjob="linkding-backup"}'
         values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup-restore-check"}'
+        values: '0x2000'
     alert_rule_test:
       - {eval_time: 20m, alertname: AppBackupMissing, exp_alerts: []}
       - eval_time: 40m
@@ -90,3 +98,29 @@ tests:
         values: '0x2000'
     alert_rule_test:
       - {eval_time: 1h, alertname: AppBackupJobFailed, exp_alerts: []}
+  - name: a monthly restore check older than 33 days alerts
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"}'
+        values: '0x50000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="linkding", cronjob="linkding-backup-restore-check"}'
+        values: '0x50000'
+    alert_rule_test:
+      - {eval_time: 32d, alertname: AppBackupRestoreCheckStale, exp_alerts: []}
+      - eval_time: 34d
+        alertname: AppBackupRestoreCheckStale
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkding, cronjob: linkding-backup-restore-check}
+            exp_annotations: {summary: "linkding-backup-restore-check has had no successful monthly restore check for 33 days", runbook: docs/backups.md (Alerts)}
+  - name: a restore check that never succeeded alerts after 33 days
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup-restore-check"}'
+        values: '0x50000'
+    alert_rule_test:
+      - {eval_time: 32d, alertname: AppBackupRestoreCheckStale, exp_alerts: []}
+      - eval_time: 34d
+        alertname: AppBackupRestoreCheckStale
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkding, cronjob: linkding-backup-restore-check}
+            exp_annotations: {summary: "linkding-backup-restore-check has had no successful monthly restore check for 33 days", runbook: docs/backups.md (Alerts)}

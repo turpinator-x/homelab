@@ -1,6 +1,6 @@
 # App backups: Linkding and Audiobookshelf
 
-AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. **Linkding is backed up to R2** (first real run 2026-11-27). Nothing has been restored from R2 yet, there is no second copy on pisrv01 and no backup alert. Audiobookshelf has its own nightly job.
+AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. **Linkding is backed up to R2** (first real run 2026-11-27). Both apps have been restored from R2 once (see "Restore"). There is no second copy on pisrv01 yet. Audiobookshelf has its own nightly job.
 
 The BlockOne Crypto Tax app has its own backups ([blockone-crypto-tax.md](blockone-crypto-tax.md), "Backups and restore"); this plan doesn't change them.
 
@@ -35,9 +35,9 @@ flowchart LR
 - [x] 3. Create the R2 bucket, keys and password; start real Linkding backups
 - [x] 4. Add Audiobookshelf
 - [ ] 5. Copy to pisrv01
-- [ ] 6. Alerts, triggered with safe test failures
-- [ ] 7. Restore drill from R2 and from pisrv01
-- [ ] 8. Monthly restore check, restore instructions, update the other docs
+- [x] 6. Alerts, triggered with a safe test failure (arrival on the phone: to confirm)
+- [ ] 7. Restore drill from R2 (done 2026-11-27) and from pisrv01 (after step 5)
+- [ ] 8. Monthly restore check (added 2026-11-27), restore instructions (below), update the other docs
 
 ## Done means
 
@@ -70,7 +70,19 @@ Audiobookshelf has the same job (`apps/staging/audiobookshelf/backup.yaml`), at 
 
 ## Alerts
 
-`apps/staging/app-backup-alerts/rules.yaml`, sent to Telegram: `AppBackupStale` (more than 26 h since a success), `AppBackupNeverSucceeded`, `AppBackupMissing` (a CronJob that no longer exists) and `AppBackupJobFailed` (hidden while the stale alert fires). `./scripts/test-app-backup-alerts.sh` unit-tests them with promtool (not part of `validate.sh`: changing that script needs the `production-change` label).
+`apps/staging/app-backup-alerts/rules.yaml`, sent to Telegram: `AppBackupStale` (more than 26 h since a success), `AppBackupNeverSucceeded`, `AppBackupMissing` (a CronJob that no longer exists), `AppBackupRestoreCheckStale` (no successful monthly restore check for 33 days) and `AppBackupJobFailed` (hidden while the stale alert fires). `./scripts/test-app-backup-alerts.sh` unit-tests them with promtool (not part of `validate.sh`: changing that script needs the `production-change` label).
+
+Alert test, 2026-11-27: a Job made from the CronJob with its first step replaced by a deliberate failure (no app data mounted). `AppBackupJobFailed` became active with receiver `telegram`, and Alertmanager's Telegram failure counters stayed at 0. The Job was then deleted.
+
+## Restore
+
+**Monthly check (automatic):** `<app>-backup-restore-check`, 05:00 on the 1st, restores the newest backup into a temporary volume and runs `verify.py`. It checks the data, not that the app starts.
+
+**Drill (by hand):** `./scripts/app-restore-drill.sh linkding` or `audiobookshelf`. It restores from R2 into a temporary pod, verifies, and starts a second copy of the app on that data, without touching the live app. With `--keep` the copy stays (it stops after an hour) for a look through `kubectl port-forward`; the script prints the commands, including how to delete it.
+
+First drill, 2026-11-27, both apps: restore and verify passed and each copy became ready. Compared with the live apps without printing any values: Linkding's account (username and stored password record) and all 748 bookmark addresses and titles were identical; Audiobookshelf's two account records and library name were identical, and the copy reported itself as set up. **Not done:** signing in to a restored copy with a real password. The first run of the drill failed (`path work: not found`) because the script named a folder that isn't in the backup; the local tests used a different restore command and had not caught it.
+
+**Replacing live data after a real loss** has not been rehearsed. Outline: bring up the cluster from this repository; stop the app (a Git change to 0 replicas); `restic restore latest --host <app>` into the empty volume (Linkding: the files go to `/etc/linkding/data`; Audiobookshelf: `config/` and `metadata/` go to the two volumes), keeping the app's user as owner; start the app. You need the restic password and R2 access (password manager and Cloudflare account, or the Secrets in Git with the SOPS age key).
 
 ## One-time setup (done 2026-11-27)
 
@@ -100,4 +112,4 @@ First run on the homelab cluster, 2026-11-27 (a Job created by hand from the Cro
 
 `./scripts/test-app-backup-audiobookshelf.sh` (6 checks passed 2026-11-27): the real Audiobookshelf image with sample users, a library and a metadata file; backup, restore, and a second Audiobookshelf started from the restore, where the saved login works and shows the saved library and both users but not one added after the backup. An app with no users is refused.
 
-**Not tested yet:** a scheduled (not hand-started) run, whether the network policy blocks other traffic, a restore from R2, the arm64 run on pisrv01, alerts.
+**Not tested yet:** a scheduled (not hand-started) nightly or monthly run, whether the network policy blocks other traffic, replacing live data, and anything on pisrv01.

@@ -9,6 +9,7 @@ resources:
   - linkding-container-env-secret.yaml
   - ingress.yaml
   - backup.yaml
+  - restore-check.yaml
   - linkding-backup-secret.yaml
 configMapGenerator:
   - name: linkding-configmap
