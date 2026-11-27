@@ -1,0 +1,132 @@
+# The second copy of the Linkding and Audiobookshelf backups, pulled from R2 onto pisrv01 (docs/backups.md).
+# R2 is read with a read-only key. Each night it also restores the newest backup of each app and checks it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-backup-mirror
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 5Gi # local-path does not enforce this
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: app-backup-mirror
+spec:
+  schedule: "30 5 * * *" # after the nightly backups; on the 1st also after the monthly checks start
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 2700
+      template:
+        metadata:
+          labels:
+            app: app-backup-mirror
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: pisrv01 # the other node: a different disk from the apps
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: copy
+              image: restic/restic:0.20.0@sha256:93999df80d4ac6cb148e82d2ef1fe6a81996f17ff535e772723538211b31555a
+              command: ["sh", "/code/mirror.sh"]
+              envFrom:
+                - secretRef:
+                    name: app-backup-mirror # restic password, source repository, read-only R2 keys
+              env:
+                - { name: RESTIC_REPOSITORY, value: /mirror/repo }
+                - { name: APPS, value: "linkding audiobookshelf" }
+                - { name: RESTORE_DIR, value: /restored }
+                - { name: TMPDIR, value: /tmp }
+                - { name: HOME, value: /tmp }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - { name: mirror, mountPath: /mirror }
+                - { name: restored, mountPath: /restored }
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+            - name: verify-linkding
+              image: &python sissbruecker/linkding:1.47.0
+              command: ["python", "/code/verify.py", "/code/linkding.json", "/restored/linkding"]
+              env: &pyenv
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              resources: &small
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              securityContext: &locked
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts: &checkmounts
+                - { name: restored, mountPath: /restored, readOnly: true }
+                - { name: code, mountPath: /code, readOnly: true }
+          containers:
+            - name: verify-audiobookshelf
+              image: *python
+              command: ["python", "/code/verify.py", "/code/audiobookshelf.json", "/restored/audiobookshelf"]
+              env: *pyenv
+              resources: *small
+              securityContext: *locked
+              volumeMounts: *checkmounts
+          volumes:
+            - name: mirror
+              persistentVolumeClaim:
+                claimName: app-backup-mirror
+            - name: code
+              configMap:
+                name: app-backup-scripts
+            - name: restored
+              emptyDir: { sizeLimit: 2Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 1Gi }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-backup-mirror
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - { port: 443, protocol: TCP }

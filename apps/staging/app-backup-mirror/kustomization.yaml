@@ -1,0 +1,9 @@
+# The copy of the app backups on pisrv01 (docs/backups.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: app-backup-mirror
+resources:
+  - namespace.yaml
+  - mirror.yaml
+  - ../../base/app-backup/
+  - app-backup-mirror-secret.yaml

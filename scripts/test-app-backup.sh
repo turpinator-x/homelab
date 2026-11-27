@@ -10,9 +10,10 @@ restic=restic/restic:0.20.0@sha256:93999df80d4ac6cb148e82d2ef1fe6a81996f17ff535e
 
 id="appbk-$$"
 volumes=("$id-live" "$id-snap" "$id-repo" "$id-restore" "$id-code" "$id-scratch")
+extra_volumes=("$id-mirror" "$id-emptysrc")
 cleanup() {
   docker rm -f "$id-app" "$id-restored" > /dev/null 2>&1 || true # cleanup only: they may not exist
-  docker volume rm -f "${volumes[@]}" > /dev/null
+  docker volume rm -f "${volumes[@]}" "${extra_volumes[@]}" > /dev/null
 }
 trap cleanup EXIT
 
@@ -143,6 +144,37 @@ rst restic --no-cache forget --host stopped --tag nightly --group-by host,tags -
 left=$(rst restic --no-cache snapshots --json --host stopped | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 [ "$left" = 2 ] || fail "stopped backups: $left of 2 left"
 pass "old backups survive when no newer ones are being made"
+
+echo "== Second copy (mirror.sh)"
+docker volume create "$id-mirror" > /dev/null
+docker run --rm --user 0 --entrypoint chown -v "$id-mirror:/m" "$linkding" 33:33 /m
+# The source repository is mounted read-only, as the read-only R2 key makes it.
+mir() { docker run --rm --user 33:33 -v "$id-code:/code:ro" -v "$id-repo:/source:ro" -v "$id-mirror:/mirror" \
+  -e RESTIC_PASSWORD -e RESTIC_REPOSITORY=/mirror/repo -e SOURCE_REPOSITORY=/source -e APPS=linkding \
+  -e RESTORE_DIR=/mirror/restored --entrypoint sh "$restic" "$@"; }
+out=$(mir /code/mirror.sh 2>&1) || fail "first mirror run: $(tail -5 <<< "$out")"
+grep -qF "no local copy yet" <<< "$out" || fail "first run did not say it created the copy"
+pass "first run copies a read-only source and restores from the copy"
+mirrored() { docker run --rm --user 33:33 -v "$id-code:/code:ro" -v "$id-mirror:/mirror:ro" -e PYTHONDONTWRITEBYTECODE=1 \
+  --entrypoint python "$linkding" /code/verify.py /code/linkding.json /mirror/restored/linkding; }
+mirrored > /dev/null || fail "data restored from the copy does not match its manifest"
+pass "data restored from the copy matches the manifest"
+docker run --rm --user 33:33 -v "$id-mirror:/mirror" --entrypoint rm "$linkding" -rf /mirror/restored
+before=$(mir -c 'restic --no-cache snapshots --json')
+out=$(mir /code/mirror.sh 2>&1) || fail "second mirror run: $(tail -5 <<< "$out")"
+! grep -qF "no local copy yet" <<< "$out" || fail "second run created the copy again"
+[ "$(mir -c 'restic --no-cache snapshots --json' | grep -o '"short_id"' | wc -l)" = "$(grep -o '"short_id"' <<< "$before" | wc -l)" ] ||
+  fail "second run copied the same backups twice"
+pass "a second run copies nothing twice"
+docker run --rm --user 33:33 -v "$id-mirror:/mirror" --entrypoint rm "$linkding" -rf /mirror/restored
+docker volume create "$id-emptysrc" > /dev/null
+must_fail "unreachable source fails the run" "repository does not exist" docker run --rm --user 33:33 \
+  -v "$id-code:/code:ro" -v "$id-emptysrc:/source:ro" -v "$id-mirror:/mirror" -e RESTIC_PASSWORD \
+  -e RESTIC_REPOSITORY=/mirror/repo -e SOURCE_REPOSITORY=/source -e APPS=linkding -e RESTORE_DIR=/mirror/restored \
+  --entrypoint sh "$restic" /code/mirror.sh
+mir -c 'restic --no-cache restore latest --host linkding --target /mirror/restored/linkding' > /dev/null
+mirrored > /dev/null || fail "the copy was damaged when the source disappeared"
+pass "the copy still restores when the source is gone"
 
 echo "== Failures must be reported"
 must_fail "snapshot into a non-empty folder" "destination is not empty" py python /code/snapshot.py /code/linkding.json /live /snap

@@ -8,3 +8,4 @@ resources:
   - llm
   - claim-watch
   - app-backup-alerts
+  - app-backup-mirror
