@@ -1,6 +1,6 @@
 # App backups: Linkding and Audiobookshelf
 
-AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. No backup of real data has been confirmed yet, and nothing here has been restored from R2.
+AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. **Linkding is backed up to R2** (first real run 2026-11-27). Nothing has been restored from R2 yet, there is no second copy on pisrv01 and no backup alert. Audiobookshelf is not covered yet.
 
 The BlockOne Crypto Tax app has its own backups ([blockone-crypto-tax.md](blockone-crypto-tax.md), "Backups and restore"); this plan doesn't change them.
 
@@ -32,7 +32,7 @@ flowchart LR
 
 - [x] 1. Record the plan
 - [x] 2. Linkding backup and restore with test storage and sample data
-- [ ] 3. Create the R2 bucket, keys and password; start real Linkding backups (bucket, key and repository done 2026-11-27; first real run to confirm)
+- [x] 3. Create the R2 bucket, keys and password; start real Linkding backups
 - [ ] 4. Add Audiobookshelf
 - [ ] 5. Copy to pisrv01
 - [ ] 6. Alerts, triggered with safe test failures
@@ -90,4 +90,6 @@ Also on 2026-11-27:
 - The CronJob in a temporary kind cluster, with a fresh Linkding and a restic repository on a temporary volume instead of R2: it completed with the security settings above. A first attempt that started before Linkding had created its database failed with `database not found`, and the retry succeeded. The network policy's effect was not checked there.
 - The setup script with fake keys and a fake Docker and clipboard: bad input, password mismatch, rejected keys and an existing Secret stop it without writing a file. Its real run created and read back the repository in R2.
 
-**Not tested yet:** the job on the homelab cluster (real volume, network policy, upload to R2), a restore from R2, the arm64 run on pisrv01, alerts. Audiobookshelf has no spec file yet.
+First run on the homelab cluster, 2026-11-27 (a Job created by hand from the CronJob): completed in 14 s. The snapshot held 705 files with 748 bookmarks and 1 user, the same counts as the live database just before; 1.3 MiB, 759 KiB stored. `check --read-data` found no errors, and Linkding's public health page answered 200 afterwards.
+
+**Not tested yet:** a scheduled (not hand-started) run, whether the network policy blocks other traffic, a restore from R2, the arm64 run on pisrv01, alerts. Audiobookshelf has no spec file yet.
