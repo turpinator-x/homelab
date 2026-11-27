@@ -109,11 +109,11 @@ Nothing here uses the GPU: the model platform runs llama.cpp on the CPU (see [ll
 
 Do this at a quiet time. minisrv01 is the only control plane and holds the app volumes, so every app is down while it reboots (a few minutes). The Pi keeps running but can't reach the API. Menu names differ between BIOS versions: the path below is the usual one for AMD mini PCs and has not been checked on this model.
 
-1. Check the cluster is healthy first: `kubectl get nodes` and `flux get kustomizations` show Ready, and no backup or runner job is running (`kubectl get pods -A | grep -v Running`).
+1. Check the cluster is healthy first: `kubectl get nodes` and `flux get kustomizations` show Ready, and no backup or runner job is running (`kubectl --context homelab get pods -A | grep -v Running`).
 2. Connect a monitor and keyboard to minisrv01 (the BIOS can't be reached over SSH). Then `ssh minisrv01 sudo reboot`, and press **Del** (some models use F2) repeatedly as it restarts.
 3. Look for **UMA Frame Buffer Size** (also called iGPU Memory or Integrated Graphics). Usual path: Advanced, AMD CBS, NBIO Common Options, GFX Configuration, UMA Frame Buffer Size. It is set to 6G. Change it to **512M**, or the smallest value offered. If it says "Auto", pick a fixed value.
 4. Save and exit (usually **F10**, then confirm).
-5. After it boots, check: `free -h` shows about 29 to 30 GB total (it was 24 GB), `journalctl -k -b | grep VRAM` shows the smaller size, `kubectl get nodes` shows Ready, and `flux get kustomizations` shows Ready. Apps come back by themselves.
+5. After it boots, check: `free -h` shows about 30 GB total (it was 24 GB; first run on 2026-11-27 showed 30 GiB and 512M VRAM), `journalctl -k -b | grep VRAM` shows the smaller size, and, from the workstation (not on minisrv01, where kubectl can't read the k3s config and flux isn't installed), `kubectl --context homelab get nodes` shows Ready and `flux get kustomizations` shows Ready. Apps come back by themselves.
 6. If the desktop-less server doesn't boot or the display is odd, power off, re-enter the BIOS and set a larger value (2G). Nothing on disk is changed by this setting.
 
 Write the result in the maintenance log below.
