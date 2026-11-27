@@ -1,0 +1,11 @@
+{
+  "databases": ["config/absdatabase.sqlite"],
+  "paths": ["config/migrations", "metadata/items", "metadata/authors"],
+  "required": [],
+  "counts": {
+    "users": { "database": "config/absdatabase.sqlite", "query": "SELECT COUNT(*) FROM users", "minimum": 1 },
+    "libraries": { "database": "config/absdatabase.sqlite", "query": "SELECT COUNT(*) FROM libraries", "minimum": 0 },
+    "library items": { "database": "config/absdatabase.sqlite", "query": "SELECT COUNT(*) FROM libraryItems", "minimum": 0 },
+    "listening progress": { "database": "config/absdatabase.sqlite", "query": "SELECT COUNT(*) FROM mediaProgresses", "minimum": 0 }
+  }
+}

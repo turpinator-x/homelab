@@ -1,0 +1,121 @@
+# Nightly Audiobookshelf backup to R2 (docs/backups.md). The snapshot runs in the Linkding image (it has Python and SQLite),
+# the upload in restic's. The local-path volume pins this pod to the node that holds it. AI-assisted (Claude Code).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audiobookshelf-backup
+  labels:
+    app: audiobookshelf-backup
+spec:
+  schedule: "45 2 * * *" # after Linkding (02:30), before the BlockOne backups (03:30)
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600 # a run missed by more than an hour (node down) waits for the next night
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: audiobookshelf-backup # not "audiobookshelf": the Service must never send traffic here
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000 # the user Audiobookshelf runs as, so every file is readable
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: snapshot
+              image: sissbruecker/linkding:1.47.0
+              command: ["python", "/code/snapshot.py", "/code/audiobookshelf.json", "/data", "/work/snapshot"]
+              env:
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                # Not read-only: reading a SQLite database in WAL mode needs to write its shared-memory file.
+                - { name: config, mountPath: /data/config }
+                - { name: metadata, mountPath: /data/metadata }
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: work, mountPath: /work }
+          containers:
+            - name: backup
+              image: restic/restic:0.20.0@sha256:93999df80d4ac6cb148e82d2ef1fe6a81996f17ff535e772723538211b31555a
+              command: ["sh", "/code/backup.sh"]
+              envFrom:
+                - secretRef:
+                    name: audiobookshelf-backup # repository, password and R2 keys, SOPS-encrypted
+              env:
+                - { name: BACKUP_APP, value: audiobookshelf }
+                - { name: SNAPSHOT_DIR, value: /work/snapshot }
+                - { name: TMPDIR, value: /tmp }
+                - { name: HOME, value: /tmp }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: work, mountPath: /work, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: config
+              persistentVolumeClaim:
+                claimName: audiobookshelf-config
+            - name: metadata
+              persistentVolumeClaim:
+                claimName: audiobookshelf-metadata
+            - name: code
+              configMap:
+                name: app-backup-scripts
+            - name: work
+              emptyDir: { sizeLimit: 1Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 1Gi }
+---
+# The backup pod: DNS, and HTTPS to public addresses (R2). Nothing may connect to it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: audiobookshelf-backup
+spec:
+  podSelector:
+    matchLabels:
+      app: audiobookshelf-backup
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - { port: 443, protocol: TCP }

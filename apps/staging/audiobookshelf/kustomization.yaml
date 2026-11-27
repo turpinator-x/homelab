@@ -3,5 +3,8 @@ kind: Kustomization
 namespace: audiobookshelf
 resources:
   - ../../base/audiobookshelf/
+  - ../../base/app-backup/
   - cloudflare.yaml
   - cloudflare-secret.yaml
+  - backup.yaml
+  - audiobookshelf-backup-secret.yaml
