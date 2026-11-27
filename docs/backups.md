@@ -1,6 +1,6 @@
 # App backups: Linkding and Audiobookshelf
 
-AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. **Linkding is backed up to R2** (first real run 2026-11-27). Nothing has been restored from R2 yet, there is no second copy on pisrv01 and no backup alert. Audiobookshelf is not covered yet.
+AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. **Linkding is backed up to R2** (first real run 2026-11-27). Nothing has been restored from R2 yet, there is no second copy on pisrv01 and no backup alert. Audiobookshelf has its own nightly job.
 
 The BlockOne Crypto Tax app has its own backups ([blockone-crypto-tax.md](blockone-crypto-tax.md), "Backups and restore"); this plan doesn't change them.
 
@@ -33,7 +33,7 @@ flowchart LR
 - [x] 1. Record the plan
 - [x] 2. Linkding backup and restore with test storage and sample data
 - [x] 3. Create the R2 bucket, keys and password; start real Linkding backups
-- [ ] 4. Add Audiobookshelf
+- [x] 4. Add Audiobookshelf
 - [ ] 5. Copy to pisrv01
 - [ ] 6. Alerts, triggered with safe test failures
 - [ ] 7. Restore drill from R2 and from pisrv01
@@ -66,6 +66,8 @@ Linkding's task queue (`tasks.sqlite3`) is left out. Files are copied after the 
 
 CronJob `linkding-backup` in namespace `linkding`, 02:30 America/Los_Angeles. An init container (Linkding's image) takes the snapshot into a temporary volume; then restic uploads it, applies retention and reads the repository back. It runs as Linkding's user with a read-only root filesystem, all capabilities dropped and no service account token. Its network policy allows only DNS and HTTPS to public addresses. The local-path volume keeps the pod on Linkding's node. A new Linkding image needs the same tag here.
 
+Audiobookshelf has the same job (`apps/staging/audiobookshelf/backup.yaml`), at 02:45, as user 1000, with its config and metadata volumes. Both apps share one restic repository, kept apart by restic's host name; `--retry-lock 10m` makes one job wait while the other holds the lock. Its Secret holds the same values as Linkding's, in the `audiobookshelf` namespace. From `audiobookshelf.json`: the database, `config/migrations`, `metadata/items` and `metadata/authors`. Cache, logs, streams, temporary files and Audiobookshelf's own `metadata/backups` folder are left out.
+
 ## One-time setup (done 2026-11-27)
 
 1. R2 bucket `homelab-app-backups`: Standard storage, public access off, no lock rule.
@@ -92,4 +94,6 @@ Also on 2026-11-27:
 
 First run on the homelab cluster, 2026-11-27 (a Job created by hand from the CronJob): completed in 14 s. The snapshot held 705 files with 748 bookmarks and 1 user, the same counts as the live database just before; 1.3 MiB, 759 KiB stored. `check --read-data` found no errors, and Linkding's public health page answered 200 afterwards.
 
-**Not tested yet:** a scheduled (not hand-started) run, whether the network policy blocks other traffic, a restore from R2, the arm64 run on pisrv01, alerts. Audiobookshelf has no spec file yet.
+`./scripts/test-app-backup-audiobookshelf.sh` (6 checks passed 2026-11-27): the real Audiobookshelf image with sample users, a library and a metadata file; backup, restore, and a second Audiobookshelf started from the restore, where the saved login works and shows the saved library and both users but not one added after the backup. An app with no users is refused.
+
+**Not tested yet:** a scheduled (not hand-started) run, whether the network policy blocks other traffic, a restore from R2, the arm64 run on pisrv01, alerts.

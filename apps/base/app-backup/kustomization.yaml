@@ -8,3 +8,4 @@ configMapGenerator:
       - snapshot.py
       - verify.py
       - linkding.json
+      - audiobookshelf.json
