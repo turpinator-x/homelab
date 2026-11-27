@@ -20,20 +20,20 @@ A two-week trial of [Forgejo](https://forgejo.org/), a self-hosted Git server, o
 
 ## Pass or fail, after two weeks
 
-- [ ] Import, clone and push work.
-- [ ] A backup restores into a working copy.
+- [x] Import, clone and push work (2026-11-27: the import pushed the history and cloned it back).
+- [x] A backup restores into a working copy (2026-11-27, from R2 and pisrv01; see below for what that check covers).
 - [ ] The secret scan passes a clean test and catches a fake secret (if the runner is left out, record that automated checks weren't proven).
 - [ ] It is comfortable to use.
 
-The two weeks start when `chain-explorer` is imported.
+The two weeks started on 2026-11-27, when `chain-explorer` was imported. Decide on or after **2026-12-11**.
 
 ## Build order
 
 - [x] 1. Forgejo running on the cluster at `git.home.arpa` (2026-11-27).
 - [x] 2. The account and sign-in (2026-11-27, after one password reset). The certificate is saved on the laptop; Git is pointed at it in step 5.
 - [x] 3. Nightly backup with alerts, copied to pisrv01 (2026-11-27).
-- [x] 4. Restore into a separate working copy, from R2 and from pisrv01 (2026-11-27, with no repository yet: repeat after step 5).
-- [ ] 5. Import `chain-explorer`; clone and push. The two weeks start here.
+- [x] 4. Restore into a separate working copy, from R2 and from pisrv01 (2026-11-27, first with no repository, then repeated with `chain-explorer` after step 5).
+- [x] 5. Import `chain-explorer`; clone and push (2026-11-27). The two weeks start here.
 - [ ] 6. Second stage: runner isolation design, owner review, then the secret scan.
 
 ## How it runs
@@ -60,6 +60,8 @@ Run `./scripts/setup-forgejo-account.sh` in a terminal. It adds `git.home.arpa` 
 In Forgejo, create an empty private repository `chain-explorer` and an access token with only `repository: read and write`. Then run `./scripts/import-forgejo-repo.sh`: it asks for the username and token, copies the code and history from GitHub (read only), downloads them again to check them, and leaves a clone in `~/projects/forgejo-trial/chain-explorer` whose only remote is Forgejo. Git keeps the token in memory for up to 8 hours (`credential cache`), not in the plain-text `store` helper that is set globally on the laptop. The script removes the token from the clipboard history file. After 8 hours or a restart, paste it again from the password manager.
 
 Tested against a local container over HTTP (10 cases: missing repository, wrong, malformed and read-only tokens, a good run, history cleanup, a later push, no token in any file and no plain-text store, rerun, and a repository with other content). The certificate setting is first used on the real run.
+
+**Real run (2026-11-27):** the first attempt stopped with nothing copied: Forgejo's log showed "not found" for the repository address and no request creating it. After the repository was created, the import succeeded: the clone from Forgejo passed `git fsck`, its head matched GitHub's `main`, its only remote is Forgejo, and no entry for `git.home.arpa` was in the plain-text store.
 
 ## Checks so far (2026-11-27)
 
@@ -111,6 +113,8 @@ sequenceDiagram
 | pisrv01 copy | run by hand; copied and verified all three apps |
 | Alert rules | unit tests pass with Forgejo added; loaded in Prometheus, healthy and not firing. No separate Telegram test: the route is the one tested for the other apps |
 
-**Not tested:** signing in to a restored copy of the live instance with the real password; a live restore that contains a repository (do it after step 5); the first scheduled run (2026-11-28 03:00 Pacific); how long the pause gets as data grows; replacing live data.
+**With the repository (2026-11-27):** a hand-run backup (76 files, 1 user, 1 repository; offline about 2 seconds) restored from R2 and from pisrv01. In both, the drill's new repository check (`scripts/check-forgejo-repos.sh`) passed `git fsck` on the restored `chain-explorer`, with 9 commits and the same head as GitHub's `main`. That check was first tried on a good, a damaged and a missing repository. (A first try at those local cases was invalid: Docker saw an empty folder, so they were redone in Docker volumes with the expected failure reasons required.)
+
+**Not tested:** signing in to, or cloning from, a restored copy of the live instance (done only in the Docker test); the first scheduled run (2026-11-28 03:00 Pacific); how long the pause gets as data grows; replacing live data.
 
 **Removing the trial:** the namespace and volume are protected from Flux pruning, so deleting them is a separate, deliberate step.

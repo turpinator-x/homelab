@@ -88,6 +88,15 @@ cleanup() {
 trap cleanup EXIT
 
 secure='{allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}'
+repocheck=''
+if [ "$app" = forgejo ]; then
+  # Git's own check of the restored repositories, in Forgejo's image (it has git)
+  repocheck="- name: repocheck
+      image: $image
+      command: [sh, -c, $(jq -Rs . scripts/check-forgejo-repos.sh), check-forgejo-repos, /restored/snapshot]
+      securityContext: $secure
+      volumeMounts: [{name: restored, mountPath: /restored, readOnly: true}]"
+fi
 k create -f - <<YAML
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -130,6 +139,7 @@ spec:
       env: [{name: PYTHONDONTWRITEBYTECODE, value: "1"}]
       securityContext: $secure
       volumeMounts: [{name: restored, mountPath: /restored, readOnly: true}, {name: code, mountPath: /code, readOnly: true}]
+    $repocheck
   containers:
     - name: app
       image: $image
@@ -146,10 +156,11 @@ YAML
 
 if ! k wait --for=condition=Ready "pod/$pod" --timeout=420s; then
   k get pod "$pod"
-  for c in restore handover verify app; do echo "--- $c"; k logs "$pod" -c "$c" --tail=30 || true; done # best effort: show why
+  for c in restore handover verify repocheck app; do echo "--- $c"; k logs "$pod" -c "$c" --tail=30 || true; done # best effort: show why
   echo "DRILL FAILED: $app" >&2
   exit 1
 fi
 k logs "$pod" -c restore --tail=3
 k logs "$pod" -c verify
+[ "$app" != forgejo ] || k logs "$pod" -c repocheck
 echo "DRILL PASSED ($from): $app started on the restored data and answers $health"
