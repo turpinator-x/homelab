@@ -5,6 +5,7 @@ configMapGenerator:
   - name: app-backup-scripts
     files:
       - backup.sh
+      - mirror.sh
       - snapshot.py
       - verify.py
       - linkding.json

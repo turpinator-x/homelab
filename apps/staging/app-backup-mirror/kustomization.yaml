@@ -1,0 +1,9 @@
+# Not in apps/staging yet: add it there once app-backup-mirror-secret.yaml exists (docs/backups.md, step 5).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: app-backup-mirror
+resources:
+  - namespace.yaml
+  - mirror.yaml
+  - ../../base/app-backup/
+  - app-backup-mirror-secret.yaml
