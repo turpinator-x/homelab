@@ -1,7 +1,8 @@
 # Runner for blockone-crypto-tax's test shards (design: docs/github-runners.md, "blockone-crypto-tax").
 # PR code runs here, and the app's production database is on the same node, so this is deliberately tighter than the
 # other scale sets: its own namespace, no Docker (no privileged pod), default-deny network, no API token, one repo.
-# Needs the SOPS Secret arc-github-app in this namespace (owner step) and the repo added to the GitHub App.
+# Needs the SOPS Secret arc-github-app in this namespace from a second GitHub App installed on this repo only
+# (owner step: infrastructure/arc/staging/arc-github-app-crypto-tax-secret.yaml, added to the PR before merge).
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
@@ -160,7 +161,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: squid
-          image: ubuntu/squid:6.6-24.04_edge
+          image: ubuntu/squid:6.6-24.04_edge@sha256:d9c34c5ab74c6dd41cf1070d9b4221aac072e67e983527ca2d41512958f77506
           args: ["-f", "/etc/squid-conf/squid.conf", "-NYC"]
           ports:
             - { name: proxy, containerPort: 3128 }
@@ -233,5 +234,8 @@ spec:
               - { name: no_proxy, value: "localhost,127.0.0.1" }
               - { name: NO_PROXY, value: "localhost,127.0.0.1" }
             resources:
-              requests: { cpu: "1", memory: 1536Mi }
+              # Memory request kept low on purpose: under node memory pressure the kubelet evicts pods using most above
+              # their request first (after priority), and a low request also raises the kernel OOM score, so a runner
+              # goes before production. Measured shard peak ~1.2 Gi with -n 2.
+              requests: { cpu: "1", memory: 512Mi }
               limits: { cpu: "3", memory: 2560Mi }
