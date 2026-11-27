@@ -361,14 +361,14 @@ spec:
                   set -euo pipefail
                   rclone copy "r2:$R2_BUCKET/blockone" /mirror/blockone --immutable --stats-one-line -v
                   # Same retention as R2 (backup-prune.sh), but only in the nightly run (bkv-* Jobs from promote.sh
-                  # skip it: a retention refusal must not block a release). The nightly run also logs the volume against its 10 Gi.
+                  # skip it: a retention refusal must not block a release). The nightly run also logs the volume against its 40 Gi budget (the PVC is nominally 10 Gi: local-path does not enforce size, and the class cannot expand a bound PVC).
                   case "$JOB_NAME" in
                     blockone-backup-mirror-*)
                       # A failed prune must not skip the decrypt check below: it is recorded, and the verify
                       # container fails the Job after it has printed its result.
                       /bin/sh /scripts/backup-prune.sh local: || { echo "prune: FAILED (exit $?)" >&2; echo prune > /verify/step-failed; }
                       rclone rmdirs /mirror/blockone --leave-root
-                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 10737418240 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
+                      /bin/sh /scripts/backup-size-report.sh /mirror/blockone 42949672960 "mirror volume" || { echo "size: FAILED" >&2; echo size > /verify/step-failed; }
                       ;;
                     *) echo "prune: skipped for job $JOB_NAME (only the nightly run prunes)" ;;
                   esac
@@ -380,7 +380,18 @@ spec:
                   data="$(dirname "$dump")/$(basename "$dump" .dump | sed 's/^blockone-db-/blockone-data-/').tar.gz"
                   echo "verifying $dump and $data"
                   rclone copyto "local:$dump" /verify/blockone-db.dump
-                  rclone copyto "local:$data" /verify/blockone-data.tar.gz
+                  # The archive is streamed through tar (decrypt, gunzip and read every entry, so a truncated or
+                  # corrupt archive fails) and never stored: its size no longer matters. pipefail makes a failure of
+                  # rclone (decrypt error, missing object) fail the pipeline, not just tar's exit status.
+                  files=$(rclone cat "local:$data" | tar -tz | wc -l) || {
+                    echo "FAIL: the case-files archive $data did not decrypt and list cleanly" >&2
+                    exit 1
+                  }
+                  if [ "$files" -eq 0 ]; then
+                    echo "FAIL: the case-files archive $data lists no entries" >&2
+                    exit 1
+                  fi
+                  echo "$files" > /verify/files-count
                   df -Pk /verify | awk 'NR == 2 { pct = int($3 * 100 / $2); printf "work: %s used %d of %d MiB (%d%%)\n", (pct >= 70 ? "WARNING" : "ok"), $3 / 1024, $2 / 1024, pct }'
                   echo "$dump" > /verify/name
               env:
@@ -441,8 +452,8 @@ spec:
                   value: /tmp/.config
                 - name: RCLONE_CACHE_DIR
                   value: /tmp/.cache
-              # The decrypted dump and archive go into the memory-backed verify volume, and those pages are charged
-              # to this container: limit = the volume's 2 Gi plus room for rclone.
+              # The decrypted dump goes into the memory-backed verify volume, and those pages are charged to this
+              # container: limit = the volume's 2 Gi plus room for rclone. The case-files archive is streamed, not stored.
               resources:
                 requests:
                   cpu: 20m
@@ -481,8 +492,7 @@ spec:
                     exit 1
                   fi
                   tables=$(grep -c ' TABLE DATA ' /tmp/list)
-                  tar -tzf /verify/blockone-data.tar.gz > /tmp/files
-                  files=$(wc -l < /tmp/files)
+                  files=$(cat /verify/files-count) # the archive was streamed and read in full by the mirror container
                   echo "OK: database dump lists $tables tables with data; case-files archive lists $files entries"
                   if [ -e /verify/step-failed ]; then
                     echo "FAIL: the nightly $(cat /verify/step-failed) step failed (see the mirror container's log)" >&2
@@ -514,10 +524,10 @@ spec:
               persistentVolumeClaim:
                 claimName: blockone-backup-mirror
             - name: verify
-              # Memory-backed (pisrv01 has 8 GB, about 5.2 GB available at the 7-day minimum): the decrypted copy never
-              # touches the Pi's SD card. Smaller than the upload job's volume on purpose (the Pi's headroom): if the
-              # archive passes 2 Gi the mirror's check fails while the backup still succeeds. Raise it with the Pi's
-              # headroom in view.
+              # Memory-backed (pisrv01 has 8 GB, about 5.2 GB available at the 7-day minimum): the decrypted dump never
+              # touches the Pi's SD card. Only the database dump lands here (the case-files archive is streamed through
+              # tar, so its size is irrelevant); if the dump ever passes 2 Gi the check fails while the backup still
+              # succeeds. Raise it with the Pi's headroom in view.
               emptyDir:
                 medium: Memory
                 sizeLimit: 2Gi
@@ -526,7 +536,7 @@ spec:
                 name: blockone-backup-scripts
                 defaultMode: 0444
             - name: tmp
-              # also memory-backed: the verify step lists the archive's file names into it
+              # also memory-backed: the verify step lists the dump's contents into it
               emptyDir:
                 medium: Memory
                 sizeLimit: 64Mi

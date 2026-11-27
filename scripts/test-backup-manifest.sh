@@ -139,7 +139,7 @@ echo "1; 0 0 TABLE DATA public users x"
 EOS
 printf '#!/usr/bin/env bash\necho a\necho b\n' > "$tmp/bin/tar"
 chmod +x "$tmp/bin/pg_restore" "$tmp/bin/tar"
-echo name > "$tmp/verify/name"; : > "$tmp/verify/blockone-db.dump"; : > "$tmp/verify/blockone-data.tar.gz"
+echo name > "$tmp/verify/name"; : > "$tmp/verify/blockone-db.dump"; echo 2 > "$tmp/verify/files-count"
 sed "s#/tmp/#$tmp/vtmp/#g; s#/verify#$tmp/verify#g" "$tmp/verify.sh" > "$tmp/verify-local.sh"
 rc=0; PATH="$tmp/bin:$PATH" bash "$tmp/verify-local.sh" > "$tmp/t/vout" 2>&1 || rc=$?
 [ "$rc" -eq 0 ] && grep -q "^OK:" "$tmp/t/vout"; check "verify: passes and prints OK when nothing failed" $?
@@ -147,6 +147,42 @@ echo prune > "$tmp/verify/step-failed"
 rc=0; PATH="$tmp/bin:$PATH" bash "$tmp/verify-local.sh" > "$tmp/t/vout" 2>&1 || rc=$?
 [ "$rc" -ne 0 ] && grep -q "^OK:" "$tmp/t/vout" && grep -q "prune step failed" "$tmp/t/vout"; check "verify: prints OK, then fails the Job when the prune step failed" $?
 rm "$tmp/verify/step-failed"
+grep -q "archive lists 2 entries" "$tmp/t/vout"; check "verify: reports the streamed archive's entry count" $?
+
+# ---- run the mirror container's streaming check (real tar and gzip, stand-in rclone) ----
+# The archive is never written to /verify; a corrupt, truncated or empty archive and a failing rclone must all FAIL.
+rm -rf "$tmp/ma" && mkdir -p "$tmp/ma/src" "$tmp/ma/v"
+for i in 1 2 3; do echo "case file $i" > "$tmp/ma/src/f$i"; done
+tar -czf "$tmp/ma/good.tar.gz" -C "$tmp/ma/src" .
+head -c 60 "$tmp/ma/good.tar.gz" > "$tmp/ma/trunc.tar.gz"
+{ head -c 40 "$tmp/ma/good.tar.gz"; printf 'XXXXXXXX'; tail -c +49 "$tmp/ma/good.tar.gz"; } > "$tmp/ma/corrupt.tar.gz"
+tar -czf "$tmp/ma/empty.tar.gz" -T /dev/null
+mkdir -p "$tmp/mbin"
+cat > "$tmp/mbin/rclone" << 'EOS'
+#!/usr/bin/env bash
+case "$1" in
+  lsf) echo "2026/11/25/blockone-db-x.dump" ;;
+  copyto) : > "$3" ;;
+  cat) [ -z "${STUB_RCLONE_CAT_FAIL:-}" ] || { echo "rclone: decrypt failed" >&2; exit 3; }
+       cat "$STUB_ARCHIVE" ;;
+  *) : ;;
+esac
+EOS
+chmod +x "$tmp/mbin/rclone"
+sed "s#/verify#$tmp/ma/v#g; s#/mirror#$tmp/ma/m#g; s#/scripts#$tmp/ma/s#g" "$tmp/mirror.sh" > "$tmp/mirror-local.sh"
+runmirror() { # name expect(0|1) archive [extra env]
+  local name=$1 want=$2 arc=$3; shift 3
+  rm -f "$tmp/ma/v/files-count"; local rc=0
+  env JOB_NAME=bkv-test R2_BUCKET=b STUB_ARCHIVE="$tmp/ma/$arc" "$@" PATH="$tmp/mbin:$PATH" bash "$tmp/mirror-local.sh" > "$tmp/t/mout" 2>&1 || rc=$?
+  if [ "$want" -eq 0 ]; then [ "$rc" -eq 0 ] && [ "$(cat "$tmp/ma/v/files-count")" -eq 4 ]; else [ "$rc" -ne 0 ] && grep -q "^FAIL:" "$tmp/t/mout"; fi
+  check "$name" $?
+}
+runmirror "mirror stream: a good archive passes, entries counted, nothing stored in /verify" 0 good.tar.gz
+[ ! -e "$tmp/ma/v/blockone-data.tar.gz" ]; check "mirror stream: the archive is not copied into /verify" $?
+runmirror "mirror stream: a truncated archive FAILs" 1 trunc.tar.gz
+runmirror "mirror stream: a corrupt archive FAILs" 1 corrupt.tar.gz
+runmirror "mirror stream: an empty archive FAILs" 1 empty.tar.gz
+runmirror "mirror stream: an rclone failure upstream of tar is not masked (pipefail)" 1 good.tar.gz STUB_RCLONE_CAT_FAIL=1
 
 if [ "$fails" -ne 0 ]; then echo "$fails check(s) failed" >&2; exit 1; fi
 echo "all backup manifest checks passed"

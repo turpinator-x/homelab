@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 0a5f38b: fix(chain): keep only what the readers use of each XRPL transaction; fail a rest
+  # Built from the app repo's main fdda38d: fix(chain): bound memory of a huge wallet's read; fail it alone instead of OOMKi
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-0a5f38b70e2724849abc20979aea3e5685cd9c48
-    digest: sha256:463d13592180cde606debe1e14de167eb312e409d391af79e9645c5675ab85ac
+    newTag: sha-fdda38dea32b77c2b722a183aa8ee22e30f2b84d
+    digest: sha256:bb829729b6999838d935ca8aff454a7b60b97fc44bb845b293f83b1efe9cbedb

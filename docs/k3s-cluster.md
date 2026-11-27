@@ -92,7 +92,50 @@ The bundled system pods (CoreDNS, Traefik, local-path-provisioner, metrics-serve
 - The node token and `k3s.yaml` are credentials. Neither belongs in Git.
 - With two network interfaces on the same subnet, k3s may pick the wrong node IP. One wired interface (or `--node-ip` and `--flannel-iface`) avoids that.
 
+## Hardware and memory (2026-11-26)
+
+What minisrv01 has, read with `sudo dmidecode -t memory` and `lscpu`:
+
+| Part | Detail |
+|---|---|
+| Machine | KAMRUI AM21, AMD Ryzen 7 8745HS (8 cores, 16 threads) |
+| Memory | 2 x 16 GB DDR5-5600 SODIMM = **32 GB**, one stick per channel, both slots full. Firmware maximum: 64 GB |
+| Seen by Linux | about 24 GB: the BIOS reserves 6 GB for the integrated graphics (`journalctl -k -b | grep VRAM`) |
+| Load on 2026-11-26 | 4% CPU, about 8 GB memory in use |
+
+Nothing here uses the GPU: the model platform runs llama.cpp on the CPU (see [llm.md](llm.md)), so the 6 GB reserved for graphics is wasted.
+
+### Get 5 GB back: shrink the graphics memory in the BIOS
+
+Do this at a quiet time. minisrv01 is the only control plane and holds the app volumes, so every app is down while it reboots (a few minutes). The Pi keeps running but can't reach the API. Menu names differ between BIOS versions: the path below is the usual one for AMD mini PCs and has not been checked on this model.
+
+1. Check the cluster is healthy first: `kubectl get nodes` and `flux get kustomizations` show Ready, and no backup or runner job is running (`kubectl --context homelab get pods -A | grep -v Running`).
+2. Connect a monitor and keyboard to minisrv01 (the BIOS can't be reached over SSH). Then `ssh minisrv01 sudo reboot`, and press **Del** (some models use F2) repeatedly as it restarts.
+3. Look for **UMA Frame Buffer Size** (also called iGPU Memory or Integrated Graphics). Usual path: Advanced, AMD CBS, NBIO Common Options, GFX Configuration, UMA Frame Buffer Size. It is set to 6G. Change it to **512M**, or the smallest value offered. If it says "Auto", pick a fixed value.
+4. Save and exit (usually **F10**, then confirm).
+5. After it boots, check: `free -h` shows about 30 GB total (it was 24 GB; first run on 2026-11-27 showed 30 GiB and 512M VRAM), `journalctl -k -b | grep VRAM` shows the smaller size, and, from the workstation (not on minisrv01, where kubectl can't read the k3s config and flux isn't installed), `kubectl --context homelab get nodes` shows Ready and `flux get kustomizations` shows Ready. Apps come back by themselves.
+6. If the desktop-less server doesn't boot or the display is odd, power off, re-enter the BIOS and set a larger value (2G). Nothing on disk is changed by this setting.
+
+Write the result in the maintenance log below.
+
+### If more capacity is needed later
+
+| Need | Option | Notes |
+|---|---|---|
+| More memory | Replace both sticks with 2 x 32 GB DDR5-5600 (64 GB) | Matches the firmware maximum. Both old sticks come out. Buy matching speed and voltage (5600 MT/s, 1.1 V) with a return policy. Cheaper than a second box |
+| More CPU, or no single point of failure | A second mini PC of the same model with 32 GB or more | Runner scale sets are pinned to minisrv01 with a `nodeSelector` and volumes are `local-path`, so a second node needs manifest changes. A worker alone doesn't make the control plane redundant |
+
+Not needed now: CPU was at 4% when this was checked. Revisit after the first busy day of CI on the new runners (see [github-runners.md](github-runners.md)), and decide by what ran out: memory or CPU.
+
 ## Maintenance log
+
+### 2026-11-27: BIOS graphics memory cut, then Postgres stuck after the reboot
+
+- The BIOS change worked: 30 GiB visible to Linux, 512M of graphics memory.
+- After the reboot both BlockOne databases restarted in a loop. The startup probe allowed 150 s, and Postgres needed longer, so the kubelet killed it (exit 137) and recovery began again. The limit is now 15 minutes. A StatefulSet did not replace its not-ready pod, so each pod was deleted once to pick up the new probe. The data volumes were not touched.
+- **Open question:** in both databases, WAL replay finished almost at once, then about 5 minutes passed before the end-of-recovery checkpoint. The cause is unknown. Look into it before the next planned reboot (`log_startup_progress_interval` and the Postgres log around that gap are a starting point).
+- `pg_isready` also timed out at the default 1 s many times in staging during start-up, so all three probes now allow 5 s.
+- The api and worker pods recovered by themselves once the databases were ready (their `migrate` init container retries every 5 minutes at most).
 
 ### 2026-10-25: Hosts renamed to minisrv01 and pisrv01
 

@@ -63,7 +63,7 @@ pisrv01     Ready    <none>          v1.36.5+k3s1   Ubuntu 24.04.5 LTS   6.8.0-1
 
 | Device | Hostname | Hardware | OS | Role |
 |--------|----------|----------|----|------|
-| Mini PC | minisrv01 | KAMRUI AM21: AMD Ryzen 7 8745HS (8 cores), 24 GB RAM, 1 TB NVMe, wired | Ubuntu Server 26.04 LTS | k3s server (control plane) |
+| Mini PC | minisrv01 | KAMRUI AM21: AMD Ryzen 7 8745HS (8 cores), 32 GB RAM (2 x 16 GB DDR5; 24 GB visible, 6 GB reserved for graphics), 1 TB NVMe, wired | Ubuntu Server 26.04 LTS | k3s server (control plane) |
 | Raspberry Pi 5 | pisrv01 | Raspberry Pi 5, 8 GB RAM, wired | Ubuntu Server 24.04 LTS | k3s agent (worker) |
 | Main laptop | Stealth | MSI Stealth 17 Studio (i9-13900H, hybrid NVIDIA GPU, 2x 990 PRO) | Omarchy (Arch Linux) | Primary workstation, cluster management, local Kubernetes via Rancher Desktop |
 | Travel laptop | odin | Lenovo ThinkPad T480 | Omarchy (Arch Linux) | Second workstation |

@@ -64,15 +64,21 @@ spec:
           startupProbe:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            # pg_isready often took over the default 1 s while the node was busy after a reboot (2026-11-27).
+            timeoutSeconds: 5
             periodSeconds: 5
-            failureThreshold: 30
+            # 15 minutes: after a node reboot Postgres replays its write-ahead log, which took longer than the
+            # old 150 s limit, so the kubelet killed it mid-recovery and recovery restarted each time (2026-11-27).
+            failureThreshold: 180
           readinessProbe:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            timeoutSeconds: 5
             periodSeconds: 10
           livenessProbe:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-U", "blockone", "-d", "blockone"]
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
           resources:
