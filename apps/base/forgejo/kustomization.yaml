@@ -10,3 +10,6 @@ configMapGenerator:
   - name: forgejo-settings
     envs:
       - forgejo.env
+  - name: forgejo-supervise
+    files:
+      - supervise.sh

@@ -3,5 +3,9 @@ kind: Kustomization
 namespace: forgejo
 resources:
   - ../../base/forgejo/
+  - ../../base/app-backup/
   - ingress.yaml
   - forgejo-tls-secret.yaml
+  - backup.yaml
+  - restore-check.yaml
+  - forgejo-backup-secret.yaml

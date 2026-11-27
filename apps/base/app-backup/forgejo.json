@@ -1,0 +1,9 @@
+{
+  "databases": ["data/forgejo.db"],
+  "paths": ["custom", "git", "jwt", "actions_id_token", "data/attachments", "data/avatars", "data/repo-avatars"],
+  "required": ["custom/conf/app.ini", "git/repositories", "jwt/private.pem"],
+  "counts": {
+    "users": { "database": "data/forgejo.db", "query": "SELECT COUNT(*) FROM \"user\"", "minimum": 1 },
+    "repositories": { "database": "data/forgejo.db", "query": "SELECT COUNT(*) FROM repository", "minimum": 0 }
+  }
+}
