@@ -17,7 +17,7 @@ metadata:
   name: runner-cap
   namespace: arc-runners
 spec:
-  hard: { limits.cpu: "4", limits.memory: 8Gi, pods: "3" }
+  hard: { limits.cpu: "12", limits.memory: 22Gi, pods: "8" }
 ---
 apiVersion: v1
 kind: LimitRange
