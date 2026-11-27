@@ -2,6 +2,10 @@
 
 Short records of why things are the way they are. Newest first. Each entry: the decision, why, and what was rejected.
 
+## 2026-11-27 — A two-week Forgejo trial, home network only
+
+Forgejo 15 (long-term support) with SQLite runs on the cluster with a copy of one quiet private repo, `chain-explorer`; GitHub stays unchanged. **Why:** to find out whether private repos could move to self-hosted Git, with backup and restore proven first. **Not part of it:** public access, SSH, moving `homelab` (Flux rebuilds the cluster from it). A runner for automated checks comes second, only if its isolation from the production workloads on the same node is good enough. This follows the 2026-10-21 entry that put Forgejo off. Full plan and pass criteria: [forgejo.md](forgejo.md).
+
 ## 2026-11-27 — Linkding and Audiobookshelf backups: restic to R2, with a copy pulled by pisrv01
 
 Nightly snapshots of both apps, encrypted by restic, go to their own R2 bucket; pisrv01 pulls a second copy with a read-only key. 35 days in each place, no downtime, and "done" means both apps start from restored data. **Why:** the data is on one disk with no scheduled backup found in the repo or the cluster; restic has encryption, retention, integrity checks and restore built in, so there is less script to own than reusing the BlockOne app's rclone jobs, and one tool covers more apps. This differs from the 2026-11-11 entry, which didn't need restic for one app's dump and archive; those backups stay as they are. **Rejected for now:** copying the apps' data to a laptop for its Proton Drive backup (off site only when the laptop is on and the manual backup is run), backing up the k3s datastore (much of the cluster is in Git; a rebuild test will show what is missing), an R2 bucket lock (needs care not to block restic's cleanup). Full plan: [backups.md](backups.md).

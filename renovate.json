@@ -100,6 +100,13 @@
       "allowedVersions": "<29.6.0"
     },
     {
+      "description": "Forgejo stays on the 15 long-term support line (docs/forgejo.md)",
+      "matchDepNames": [
+        "codeberg.org/forgejo/forgejo"
+      ],
+      "allowedVersions": "<16.0.0"
+    },
+    {
       "description": "Majors always wait for the weekly review",
       "matchUpdateTypes": [
         "major"

@@ -1,0 +1,30 @@
+# Home network only: no tunnel. HTTPS only, with a self-signed certificate for this name.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forgejo
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure # no plain HTTP: passwords and tokens go here
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/name: Forgejo
+    gethomepage.dev/description: Git trial (LAN)
+    gethomepage.dev/group: Homelab (LAN)
+    gethomepage.dev/icon: forgejo.png
+    gethomepage.dev/href: https://git.home.arpa
+    gethomepage.dev/pod-selector: app=forgejo
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [git.home.arpa]
+      secretName: forgejo-tls
+  rules:
+    - host: git.home.arpa
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forgejo
+                port:
+                  number: 3000

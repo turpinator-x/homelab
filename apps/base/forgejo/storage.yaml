@@ -1,0 +1,13 @@
+# Everything Forgejo keeps is in this one volume: repositories, the SQLite database, app.ini and its keys.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forgejo-data
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled # keep data if the app is turned off
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 10Gi # local-path does not enforce this
