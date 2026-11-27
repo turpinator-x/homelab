@@ -7,3 +7,4 @@ resources:
   - homepage
   - llm
   - claim-watch
+  - app-backup-alerts

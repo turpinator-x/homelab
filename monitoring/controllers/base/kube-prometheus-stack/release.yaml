@@ -42,10 +42,11 @@ spec:
             - receiver: "null"
               matchers:
                 - alertname =~ "Watchdog|InfoInhibitor"
-            # BlockOne backups (apps/base/blockone-crypto-tax/backup-alerts.yaml): every severity
+            # BlockOne backups (apps/base/blockone-crypto-tax/backup-alerts.yaml) and the Linkding and Audiobookshelf
+            # backups (apps/staging/app-backup-alerts/rules.yaml): every severity
             - receiver: telegram
               matchers:
-                - alertname =~ "BlockOneBackup.*"
+                - alertname =~ "(BlockOne|App)Backup.*"
               repeat_interval: 24h
             # BlockOne app alerts (apps/base/blockone-crypto-tax/app-alerts.yaml): warning and critical; info stays in the UI
             - receiver: telegram
@@ -70,6 +71,9 @@ spec:
           # A failed run will also go stale; while it's stale, the stale alert is enough
           - source_matchers: [alertname = "BlockOneBackupStale"]
             target_matchers: [alertname = "BlockOneBackupJobFailed"]
+            equal: [namespace]
+          - source_matchers: [alertname = "AppBackupStale"]
+            target_matchers: [alertname = "AppBackupJobFailed"]
             equal: [namespace]
         receivers:
           - name: "null"
