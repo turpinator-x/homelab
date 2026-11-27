@@ -24,7 +24,8 @@ flowchart LR
 - **One scale set per repository.** A personal GitHub account can only register runners per repository (runner groups are for organizations), so each repo gets its own: `homelab-claims-app`, `homelab-blockone-devops-ai-journey`, `homelab-devops-study-app`.
 - **Ephemeral:** zero runners when idle, one pod per job, deleted afterwards. Nothing carries over between jobs.
 - **Two namespaces.** `arc-runners` (Pod Security baseline) for jobs that need no Docker. `arc-runners-dind` (privileged, needed for Docker-in-Docker) for the curriculum tests, which start privileged test containers, and the study app's image builds and k3d tests. Only my own private repos use it.
-- **Capped so CI can't starve anything else.** Every container gets default limits from a LimitRange (3 CPU, 6 GiB), and a ResourceQuota caps each namespace (4 CPU / 8 GiB and 8 CPU / 14 GiB). One job per repo at a time. minisrv01 has 16 cores and 24 GB, and the model platform keeps its share.
+- **Capped so CI can't starve anything else.** Every container gets default limits from a LimitRange (3 CPU, 6 GiB), and a ResourceQuota caps each namespace (4 CPU / 8 GiB for `arc-runners`, 4 CPU / 7 GiB for `arc-runners-dind`). One job per repo at a time, and one dind pod at a time across both dind repos; the other repo's job waits. minisrv01 has 16 cores and about 30 GiB visible.
+- **Job containers count against the pod.** A privileged pod sees the node's whole cgroup tree, so Docker-in-Docker's default puts job containers in `/docker`, outside the pod and unlimited. `dockerd` gets `--cgroup-parent` under its own pod's cgroup, and exits if the cgroup path isn't the expected one.
 - **Its own Flux Kustomization** (`arc`), so a runner problem can't hold up Renovate or the other infrastructure.
 - **Pinned to minisrv01** (amd64). The curriculum builds amd64 containers, and the Pi is too small for CI.
 
