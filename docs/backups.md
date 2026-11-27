@@ -68,6 +68,10 @@ CronJob `linkding-backup` in namespace `linkding`, 02:30 America/Los_Angeles. An
 
 Audiobookshelf has the same job (`apps/staging/audiobookshelf/backup.yaml`), at 02:45, as user 1000, with its config and metadata volumes. Both apps share one restic repository, kept apart by restic's host name; `--retry-lock 10m` makes one job wait while the other holds the lock. Its Secret holds the same values as Linkding's, in the `audiobookshelf` namespace. From `audiobookshelf.json`: the database, `config/migrations`, `metadata/items` and `metadata/authors`. Cache, logs, streams, temporary files and Audiobookshelf's own `metadata/backups` folder are left out.
 
+## Alerts
+
+`apps/staging/app-backup-alerts/rules.yaml`, sent to Telegram: `AppBackupStale` (more than 26 h since a success), `AppBackupNeverSucceeded`, `AppBackupMissing` (a CronJob that no longer exists) and `AppBackupJobFailed` (hidden while the stale alert fires). `./scripts/test-app-backup-alerts.sh` unit-tests them with promtool (not part of `validate.sh`: changing that script needs the `production-change` label).
+
 ## One-time setup (done 2026-11-27)
 
 1. R2 bucket `homelab-app-backups`: Standard storage, public access off, no lock rule.

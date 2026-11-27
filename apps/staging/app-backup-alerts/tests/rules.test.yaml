@@ -1,0 +1,92 @@
+# promtool tests for ../rules.yaml (run: scripts/test-app-backup-alerts.sh). Time starts at 0.
+rule_files:
+  - ../rules.rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: a recent success is quiet
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '0x2000'
+    alert_rule_test:
+      - {eval_time: 25h, alertname: AppBackupStale, exp_alerts: []}
+      - {eval_time: 25h, alertname: AppBackupNeverSucceeded, exp_alerts: []}
+      - {eval_time: 25h, alertname: AppBackupMissing, exp_alerts: []}
+      - {eval_time: 25h, alertname: AppBackupJobFailed, exp_alerts: []}
+  - name: 27 hours without a success is stale
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '90000x2000'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: AppBackupStale
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkding, cronjob: linkding-backup}
+            exp_annotations: {summary: "linkding-backup has not succeeded for more than 26 hours", runbook: docs/backups.md (Alerts)}
+      - {eval_time: 27h, alertname: AppBackupNeverSucceeded, exp_alerts: []}
+  - name: never succeeded after 26 hours
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_created{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="audiobookshelf", cronjob="audiobookshelf-backup"}'
+        values: '90000x2000'
+    alert_rule_test:
+      - {eval_time: 20h, alertname: AppBackupNeverSucceeded, exp_alerts: []}
+      - eval_time: 27h
+        alertname: AppBackupNeverSucceeded
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkding, cronjob: linkding-backup}
+            exp_annotations: {summary: "linkding-backup has existed for 26 hours without one successful run", runbook: docs/backups.md (Alerts)}
+  - name: a missing CronJob alerts
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="linkding", cronjob="linkding-backup"}'
+        values: '0x2000'
+    alert_rule_test:
+      - {eval_time: 20m, alertname: AppBackupMissing, exp_alerts: []}
+      - eval_time: 40m
+        alertname: AppBackupMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: audiobookshelf, cronjob: audiobookshelf-backup}
+            exp_annotations: {summary: "The backup CronJob audiobookshelf-backup does not exist (or its metrics are gone)", runbook: docs/backups.md (Alerts)}
+  - name: a failed backup job warns
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="linkding", job_name="linkding-backup-123", condition="true"}'
+        values: '1x2000'
+      - series: 'kube_job_created{namespace="linkding", job_name="linkding-backup-123"}'
+        values: '0x2000'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AppBackupJobFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: linkding, job_name: linkding-backup-123, condition: "true"}
+            exp_annotations: {summary: "Backup job linkding-backup-123 failed", description: "kubectl --context homelab -n linkding logs job/linkding-backup-123 --all-containers", runbook: docs/backups.md (Alerts)}
+      - {eval_time: 25h, alertname: AppBackupJobFailed, exp_alerts: []}
+  - name: another app's failed job is ignored
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="linkding", job_name="linkding-other-123", condition="true"}'
+        values: '1x2000'
+      - series: 'kube_job_created{namespace="linkding", job_name="linkding-other-123"}'
+        values: '0x2000'
+    alert_rule_test:
+      - {eval_time: 1h, alertname: AppBackupJobFailed, exp_alerts: []}

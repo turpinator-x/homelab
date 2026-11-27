@@ -86,12 +86,12 @@ Alertmanager's config is in the HelmRelease values (`monitoring/controllers/base
 | Route | Receiver | Repeat |
 |---|---|---|
 | `Watchdog`, `InfoInhibitor` | `null` | |
-| `BlockOneBackup*` (any severity) | `telegram` | 24 h |
+| `BlockOneBackup*` and `AppBackup*` (any severity) | `telegram` | 24 h |
 | `BlockOne*` with `severity` warning or critical (app alerts, `apps/base/blockone-crypto-tax/app-alerts.yaml`) | `telegram` | 24 h |
 | any other `severity=critical` | `telegram` | 12 h |
 | everything else (warnings, info) | `null` (UI only) | |
 
-Grouped by `alertname` and `namespace` (30 s wait, 5 min group interval), resolved notices on. Inhibitions: the chart's defaults (critical hides warning/info for the same alert and namespace, warning hides info), plus `BlockOneBackupStale` hides `BlockOneBackupJobFailed` while both fire. The config was checked with `amtool check-config` and `amtool config routes test` from the pinned Alertmanager image (v0.34.1).
+Grouped by `alertname` and `namespace` (30 s wait, 5 min group interval), resolved notices on. Inhibitions: the chart's defaults (critical hides warning/info for the same alert and namespace, warning hides info), plus `BlockOneBackupStale` hides `BlockOneBackupJobFailed` while both fire (and `AppBackupStale` hides `AppBackupJobFailed`). The config was checked with `amtool check-config` and `amtool config routes test` from the pinned Alertmanager image (v0.34.1).
 
 Test a notification: port-forward `svc/kube-prometheus-stack-alertmanager 9093` and POST an alert with `severity=critical` to `/api/v2/alerts`, then check `alertmanager_notifications_total{integration="telegram"}` rose and `alertmanager_notifications_failed_total{integration="telegram"}` didn't.
 
