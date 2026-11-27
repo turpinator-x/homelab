@@ -3,10 +3,13 @@ kind: Kustomization
 namespace: linkding
 resources:
   - ../../base/linkding/
+  - ../../base/app-backup/
   - cloudflare.yaml
   - cloudflare-secret.yaml
   - linkding-container-env-secret.yaml
   - ingress.yaml
+  - backup.yaml
+  - linkding-backup-secret.yaml
 configMapGenerator:
   - name: linkding-configmap
     literals:

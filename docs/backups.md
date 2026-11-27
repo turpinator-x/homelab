@@ -1,6 +1,6 @@
 # App backups: Linkding and Audiobookshelf
 
-AI-assisted (planned and written with Claude Code). **Status: not running yet.** The Linkding backup and restore scripts are tested locally with sample data. Nothing is deployed and no real data has been backed up by them.
+AI-assisted (planned and written with Claude Code). **Status:** the Linkding nightly job is defined in `apps/staging/linkding/backup.yaml`. No backup of real data has been confirmed yet, and nothing here has been restored from R2.
 
 The BlockOne Crypto Tax app has its own backups ([blockone-crypto-tax.md](blockone-crypto-tax.md), "Backups and restore"); this plan doesn't change them.
 
@@ -32,7 +32,7 @@ flowchart LR
 
 - [x] 1. Record the plan
 - [x] 2. Linkding backup and restore with test storage and sample data
-- [ ] 3. Create the R2 bucket, keys and password; start real Linkding backups
+- [ ] 3. Create the R2 bucket, keys and password; start real Linkding backups (bucket, key and repository done 2026-11-27; first real run to confirm)
 - [ ] 4. Add Audiobookshelf
 - [ ] 5. Copy to pisrv01
 - [ ] 6. Alerts, triggered with safe test failures
@@ -62,6 +62,18 @@ Linkding's task queue (`tasks.sqlite3`) is left out. Files are copied after the 
 
 `check --read-data` downloads the whole repository every night. That suits a few megabytes; revisit it if the data grows.
 
+## The nightly job (Linkding)
+
+CronJob `linkding-backup` in namespace `linkding`, 02:30 America/Los_Angeles. An init container (Linkding's image) takes the snapshot into a temporary volume; then restic uploads it, applies retention and reads the repository back. It runs as Linkding's user with a read-only root filesystem, all capabilities dropped and no service account token. Its network policy allows only DNS and HTTPS to public addresses. The local-path volume keeps the pod on Linkding's node. A new Linkding image needs the same tag here.
+
+## One-time setup (done 2026-11-27)
+
+1. R2 bucket `homelab-app-backups`: Standard storage, public access off, no lock rule.
+2. An account API token with **Object Read & Write** on that bucket only.
+3. `./scripts/setup-app-backup-r2.sh` in the owner's own terminal. It asks for the endpoint and the two keys, makes the restic password and waits until the password manager's copy matches, creates the repository, and writes `apps/staging/linkding/linkding-backup-secret.yaml`.
+
+Restoring after losing the cluster needs the restic password and R2 access: from the password manager and the Cloudflare account (a new token can be made there), or from that Secret with the SOPS age key.
+
 ## Test
 
 `./scripts/test-app-backup.sh` needs Docker. It runs the real Linkding image with sample data and a throwaway restic repository on local disk. It is not part of `validate.sh` or CI.
@@ -73,4 +85,9 @@ Run on 2026-11-27, all 19 checks passed:
 - Retention: 40 and 60 day old backups removed, a 30 day old one kept; old backups survive when none are newer.
 - Reported as failures: non-empty destination, missing secret key, empty database, broken database, unfinished snapshot, changed file, missing file, wrong row count, wrong password, damaged backup file, missing repository.
 
-**Not tested yet:** R2, the Kubernetes jobs and their permissions, file ownership on the real volume, the arm64 run on pisrv01, alerts, and anything with real data. Audiobookshelf has no spec file yet.
+Also on 2026-11-27:
+
+- The CronJob in a temporary kind cluster, with a fresh Linkding and a restic repository on a temporary volume instead of R2: it completed with the security settings above. A first attempt that started before Linkding had created its database failed with `database not found`, and the retry succeeded. The network policy's effect was not checked there.
+- The setup script with fake keys and a fake Docker and clipboard: bad input, password mismatch, rejected keys and an existing Secret stop it without writing a file. Its real run created and read back the repository in R2.
+
+**Not tested yet:** the job on the homelab cluster (real volume, network policy, upload to R2), a restore from R2, the arm64 run on pisrv01, alerts. Audiobookshelf has no spec file yet.

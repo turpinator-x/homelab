@@ -1,0 +1,10 @@
+# The scripts and per-app specs shared by the app backup CronJobs (docs/backups.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+configMapGenerator:
+  - name: app-backup-scripts
+    files:
+      - backup.sh
+      - snapshot.py
+      - verify.py
+      - linkding.json
