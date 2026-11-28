@@ -35,7 +35,7 @@ configMapGenerator:
 #         value: 0
 images:
   # Built by turpinator-x/blockone-crypto-tax's image workflow (linux/amd64 + linux/arm64).
-  # Built from the app repo's main 4723851: fix(chain): never read exchange accounts; bound shared and oversized histories (
+  # Built from the app repo's main 171f147: Merge pull request #209 from turpinator-x/fix/same-day-stale-chain-read
   - name: ghcr.io/turpinator-x/blockone-crypto-tax
-    newTag: sha-47238519e85aa25b044e20b47796787397c3a6d9
-    digest: sha256:b8bcfabd354cfc0ad19750b745c1b7b7f2dfa435fb5b85d7c8297abf045ab9bf
+    newTag: sha-171f147841d13b37c272e9ea47c019e8b0913fb9
+    digest: sha256:4849e1e984d1229a354dd3a2b3675c981c785483a1f650ea9cedd27e49328bf9
